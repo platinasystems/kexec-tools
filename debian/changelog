@@ -1,0 +1,6 @@
+kexec-tools (1.101-1) unstable; urgency=low
+
+  * Initial release (closes: Bug#320202, Bug#318881)
+
+ -- Khalid Aziz <khalid@debian.org>  Fri, 09 Sep 2005 14:06:19 -0600
+
