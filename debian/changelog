@@ -1,9 +1,3 @@
-kexec-tools (1.101-1bpo1) sarge-backports; urgency=low
-
-  * Rebuild for Backports <http://www.backports.org/>.
-
- -- Gurkan Sengun <gurkan@linuks.mine.nu>  Fri, 11 Aug 2006 10:02:48 +0200
-
 kexec-tools (1.101-2) unstable; urgency=low
 
   * Fixed build failures (closes: Bug#327639, Bug#327715)
