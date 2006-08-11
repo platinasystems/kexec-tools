@@ -42,9 +42,10 @@ PKGDATADIR=$(DATADIR)/$(PACKAGE)
 PKGLIBDIR=$(LIBDIR)/$(PACKAGE)
 PKGINCLUDEIR=$(INCLUDEDIR)/$(PACKAGE)
 
-MAN_PAGES:= kexec/kexec.8
-BINARIES_i386:=  $(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
-BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
+MAN_PAGES:= $(MANDIR)/man8/kexec.8
+MAN_PAGES+= $(MANDIR)/man8/kdump.8
+BINARIES_i386:=  $(SBINDIR)/kexec $(PKGDATADIR)/kexec_test
+BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGDATADIR)/kexec_test
 BINARIES:=$(SBINDIR)/kexec $(SBINDIR)/kdump $(BINARIES_$(ARCH)) 
 
 TARGETS:=$(BINARIES) $(MAN_PAGES)
@@ -148,6 +149,8 @@ clean:
 	@$(RM) -rf rpm
 	@$(RM) -f config.log config.status config.cache
 	@$(RM) -f $(TARBALL)
+
+distclean: dist-clean
 
 dist-clean: clean
 	@$(RM) -rf $(OBJDIR)

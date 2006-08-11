@@ -6,8 +6,8 @@
 
 @DPATCH@
 diff -urNp kexec-tools-1.101.orig/kexec/arch/ia64/kexec-elf-ia64.c kexec-tools-1.101/kexec/arch/ia64/kexec-elf-ia64.c
---- kexec-tools-1.101.orig/kexec/arch/ia64/kexec-elf-ia64.c	2005-07-28 09:18:50.586221864 -0600
-+++ kexec-tools-1.101/kexec/arch/ia64/kexec-elf-ia64.c	2005-07-28 11:19:22.808789519 -0600
+--- kexec-tools-1.101.orig/kexec-tools-1.101/kexec/arch/ia64/kexec-elf-ia64.c	2005-07-28 09:18:50.586221864 -0600
++++ kexec-tools-1.101/kexec-tools-1.101/kexec/arch/ia64/kexec-elf-ia64.c	2005-07-28 11:19:22.808789519 -0600
 @@ -43,6 +43,8 @@
  
  static const int probe_debug = 0;
@@ -138,8 +138,8 @@ diff -urNp kexec-tools-1.101.orig/kexec/arch/ia64/kexec-elf-ia64.c kexec-tools-1
  	return 0;
  }
 diff -urNp kexec-tools-1.101.orig/kexec/arch/ia64/kexec-ia64.c kexec-tools-1.101/kexec/arch/ia64/kexec-ia64.c
---- kexec-tools-1.101.orig/kexec/arch/ia64/kexec-ia64.c	2005-01-10 23:28:36.000000000 -0700
-+++ kexec-tools-1.101/kexec/arch/ia64/kexec-ia64.c	2005-04-06 15:40:43.000000000 -0600
+--- kexec-tools-1.101.orig/kexec-tools-1.101/kexec/arch/ia64/kexec-ia64.c	2005-01-10 23:28:36.000000000 -0700
++++ kexec-tools-1.101/kexec-tools-1.101/kexec/arch/ia64/kexec-ia64.c	2005-04-06 15:40:43.000000000 -0600
 @@ -87,7 +87,6 @@ int arch_process_options(int argc, char 
  	};
  	static const char short_options[] = KEXEC_ARCH_OPT_STR;
@@ -182,8 +182,8 @@ diff -urNp kexec-tools-1.101.orig/kexec/arch/ia64/kexec-ia64.c kexec-tools-1.101
  void arch_update_purgatory(struct kexec_info *info)
  {
 diff -urNp kexec-tools-1.101.orig/kexec/kexec.c kexec-tools-1.101/kexec/kexec.c
---- kexec-tools-1.101.orig/kexec/kexec.c	2005-01-13 06:24:29.000000000 -0700
-+++ kexec-tools-1.101/kexec/kexec.c	2005-04-08 09:14:22.000000000 -0600
+--- kexec-tools-1.101.orig/kexec-tools-1.101/kexec/kexec.c	2005-01-13 06:24:29.000000000 -0700
++++ kexec-tools-1.101/kexec-tools-1.101/kexec/kexec.c	2005-04-08 09:14:22.000000000 -0600
 @@ -298,7 +298,12 @@ void add_segment(struct kexec_info *info
  	}
  	

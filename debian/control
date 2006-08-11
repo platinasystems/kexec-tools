@@ -2,6 +2,7 @@ Source: kexec-tools
 Section: admin
 Priority: optional
 Maintainer: Khalid Aziz <khalid@debian.org>
+Uploaders: Gurkan Sengun <gurkan@linuks.mine.nu>
 Build-Depends: debhelper (>= 4.0.0), dpatch, gnu-efi (>=3.0a-4)[ia64]
 Standards-Version: 3.6.2
 
