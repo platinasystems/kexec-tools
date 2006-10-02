@@ -69,6 +69,8 @@ binary-arch: build install
 	dh_testroot
 	dh_installchangelogs 
 	dh_installdocs
+	dh_installinit --no-start -r --name=kexec -- start 85 6 .
+	dh_installinit --no-start -r --name=kexec-load -- stop 39 6 .
 	dh_installexamples
 	dh_install
 	dh_installman
