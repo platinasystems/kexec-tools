@@ -6,6 +6,11 @@
 # There is probably a cleaner way to do this but for now this
 # should keep us from accidentially include unsafe library functions
 # or headers.
+
+ifeq ($(ARCH),ppc64)
+LDFLAGS = -melf64ppc
+endif
+
 PCFLAGS:=-Wall -Os  \
 	-I$(shell $(CC) -print-file-name=include) \
 	-Ipurgatory/include -Ipurgatory/arch/$(ARCH)/include \
@@ -16,11 +21,11 @@ PCFLAGS += $(call cc-option, -fnobuiltin)
 PCFLAGS += $(call cc-option, -fnostdinc)
 PCFLAGS += $(call cc-option, -fno-zero-initialized-in-bss)
 
-PURGATORY_C_SRCS:= 
+PURGATORY_C_SRCS:=
 PURGATORY_C_SRCS += purgatory/purgatory.c
 PURGATORY_C_SRCS += purgatory/printf.c
 PURGATORY_C_SRCS += purgatory/string.c
-PURGATORY_S_OBJS:= 
+PURGATORY_S_OBJS:=
 
 include purgatory/arch/$(ARCH)/Makefile
 

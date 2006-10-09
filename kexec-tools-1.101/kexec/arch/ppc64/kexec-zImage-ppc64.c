@@ -153,7 +153,8 @@ int zImage_ppc64_load(FILE *file, int argc, char **argv, void **ret_entry,
 			return -1;
 		}
 		mem_offset = p->p_vaddr - load_loc;
-		if (fread(segment->buf+mem_offset, p->p_filesz, 1, file) != 1) {
+		if (fread((void *)segment->buf+mem_offset, p->p_filesz, 1,
+				file) != 1) {
 			perror("read error: ");
 			return -1;
 		}
@@ -161,7 +162,7 @@ int zImage_ppc64_load(FILE *file, int argc, char **argv, void **ret_entry,
 	segment->mem = (void *) load_loc;
 	segment->memsz = memsize;
 	segment->bufsz = filesize;
-	*ret_entry = elf.e_entry;
+	*ret_entry = (void *)((uint64_t)elf.e_entry);
 	*ret_nr_segments = i - 1;
 	free(ph);
 	return 0;

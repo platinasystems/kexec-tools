@@ -27,42 +27,87 @@
 #include <stdint.h>
 #include <string.h>
 #include <getopt.h>
+#include <sched.h>
 #include <sys/utsname.h>
 #include "../../kexec.h"
 #include "../../kexec-syscall.h"
 #include "kexec-ia64.h"
 #include <arch/options.h>
 
-#define MAX_MEMORY_RANGES 64
-#define MAX_LINE 160
 static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
 /* Return a sorted list of available memory ranges. */
-int get_memory_ranges(struct memory_range **range, int *ranges)
+int get_memory_ranges(struct memory_range **range, int *ranges,
+				unsigned long kexec_flags)
 {
-	int memory_ranges;
-	/*
-	 * /proc/iomem on ia64 does not show where all memory is. If
-	 * that is fixed up, we can make use of that to validate
-	 * the memory range kernel will be loade din. Until then.....
-	 * -- Khalid Aziz
-	 */
-	
-	/* Note that the ia64 architecture mandates all systems will
-	 * have at least 64MB at 0-64M.  The SGI altix does not follow
-	 * that restriction, but a reasonable guess is better than nothing
-	 * at all.
-	 * -- Eric Biederman
-	 */
-	fprintf(stderr, "Warning assuming memory at 0-64MB is present\n");
-	memory_ranges = 0;
-	memory_range[memory_ranges].start = 0x00010000;
-	memory_range[memory_ranges].end   = 0x10000000;
-	memory_range[memory_ranges].type  = RANGE_RAM;
-	memory_ranges++;
-	*range = memory_range;
-	*ranges = memory_ranges;
-	return 0;
+	const char iomem[]= "/proc/iomem";
+	int memory_ranges = 0;
+	char line[MAX_LINE];
+	FILE *fp;
+	fp = fopen(iomem, "r");
+	if (!fp) {
+		fprintf(stderr, "Cannot open %s: %s\n",
+			iomem, strerror(errno));
+		return -1;
+	}
+
+	while(fgets(line, sizeof(line), fp) != 0) {
+		unsigned long start, end;
+		char *str;
+		int type;
+		int consumed;
+		int count;
+		if (memory_ranges >= MAX_MEMORY_RANGES)
+			break;
+		count = sscanf(line, "%lx-%lx : %n",
+				&start, &end, &consumed);
+		if (count != 2)
+			continue;
+		str = line + consumed;
+		end = end + 1;
+		if (memcmp(str, "System RAM\n", 11) == 0) {
+			type = RANGE_RAM;
+		}
+		else if (memcmp(str, "reserved\n", 9) == 0) {
+			type = RANGE_RESERVED;
+		}
+		else if (memcmp(str, "Crash kernel\n", 13) == 0) {
+			/* Redefine the memory region boundaries if kernel
+			 * exports the limits and if it is panic kernel.
+			 * Override user values only if kernel exported
+			 * values are subset of user defined values.
+			 */
+
+			if (kexec_flags & KEXEC_ON_CRASH) {
+				if (start > mem_min)
+					mem_min = start;
+				if (end < mem_max)
+					mem_max = end;
+			}
+			continue;
+		} else
+			continue;
+		/*
+		 * Check if this memory range can be coalesced with
+		 * the previous range
+		 */
+		if ((memory_ranges > 0) &&
+			(start == memory_range[memory_ranges-1].end) &&
+			(type == memory_range[memory_ranges-1].type)) {
+			memory_range[memory_ranges-1].end = end;
+		}
+		else {
+			memory_range[memory_ranges].start = start;
+			memory_range[memory_ranges].end = end;
+			memory_range[memory_ranges].type = type;
+			memory_ranges++;
+		}
+	}
+	fclose(fp);
+ 	*range = memory_range;
+ 	*ranges = memory_ranges;
+
+ 	return 0;
 }
 
 /* Supported file types and callbacks */
@@ -76,9 +121,6 @@ void arch_usage(void)
 {
 }
 
-static struct {
-} arch_options = {
-};
 int arch_process_options(int argc, char **argv)
 {
 	static const struct option options[] = {
@@ -87,8 +129,12 @@ int arch_process_options(int argc, char **argv)
 	};
 	static const char short_options[] = KEXEC_ARCH_OPT_STR;
 	int opt;
-	unsigned long value;
-	char *end;
+
+	/* execute from monarch processor */
+        cpu_set_t affinity;
+	CPU_ZERO(&affinity);
+	CPU_SET(0, &affinity);
+        sched_setaffinity(0, sizeof(affinity), &affinity);
 
 	opterr = 0; /* Don't complain about unrecognized options here */
 	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
@@ -103,7 +149,7 @@ int arch_process_options(int argc, char **argv)
 	return 0;
 }
 
-int arch_compat_trampoline(struct kexec_info *info, unsigned long *flags)
+int arch_compat_trampoline(struct kexec_info *info)
 {
 	int result;
 	struct utsname utsname;
@@ -115,32 +161,7 @@ int arch_compat_trampoline(struct kexec_info *info, unsigned long *flags)
 	}
 	if (strcmp(utsname.machine, "ia64") == 0)
 	{
-		*flags |= KEXEC_ARCH_X86_64;
-	}
-	else {
-		fprintf(stderr, "Unsupported machine type: %s\n",
-			utsname.machine);
-		return -1;
-	}
-	return 0;
-}
-
-int arch_compat_trampoline(struct kexec_info *info, unsigned long *flags)
-{
-	int result;
-	struct utsname utsname;
-	result = uname(&utsname);
-	if (result < 0) {
-		fprintf(stderr, "uname failed: %s\n",
-			strerror(errno));
-		return -1;
-	}
-	if (strcmp(utsname.machine, "ia64") == 0)
-	{
-		/* For compatibility with older patches 
-		 * use KEXEC_ARCH_DEFAULT instead of KEXEC_ARCH_IA64 here.
-		 */
-		*flags |= KEXEC_ARCH_DEFAULT;
+		info->kexec_flags |= KEXEC_ARCH_IA_64;
 	}
 	else {
 		fprintf(stderr, "Unsupported machine type: %s\n",

@@ -1,0 +1,19 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## x86_64-typo.dpatch by  <mckinstry@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: No description.
+
+@DPATCH@
+diff -urNad kexec-tools-1.101~/kexec-tools-1.101/kexec/arch/x86_64/kexec-elf-x86_64.c kexec-tools-1.101/kexec-tools-1.101/kexec/arch/x86_64/kexec-elf-x86_64.c
+--- kexec-tools-1.101~/kexec-tools-1.101/kexec/arch/x86_64/kexec-elf-x86_64.c	2005-01-13 13:10:54.000000000 +0000
++++ kexec-tools-1.101/kexec-tools-1.101/kexec/arch/x86_64/kexec-elf-x86_64.c	2006-09-01 09:03:25.000000000 +0100
+@@ -143,7 +143,7 @@
+ 			arg_style = ARG_STYLE_LINUX;
+ 			break;
+ 		case OPT_ARGS_NONE:
+-#ifdef __x86_64___
++#ifdef __x86_64__
+ 			arg_style = ARG_STYLE_NONE;
+ #else
+ 			die("--args-none only works on arch x86_64\n");

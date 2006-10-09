@@ -1,11 +1,11 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:		kexec-load
-# Required-Start:
-# Required-Stop:
+# Required-Start:	$local_fs
+# Required-Stop:	$local_fs
 # Should-Start:
 # Should-Stop:
-# Default-Start:
+# Default-Start:	0 1 2 3 4 5
 # Default-Stop:		6
 # Short-Description: Load kernel image with kexec
 # Description:
@@ -25,7 +25,12 @@ do_stop () {
 
 	test -z "$REAL_APPEND" && REAL_APPEND="`cat /proc/cmdline`"
 	log_action_begin_msg "Loading new kernel image into memory"
-	kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$REAL_APPEND"
+	if [ -z "$INITRD" ]
+	then
+		kexec -l "$KERNEL_IMAGE" --append="$REAL_APPEND"
+	else
+		kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$REAL_APPEND"
+	fi
 	log_action_end_msg $?
 }
 
@@ -45,3 +50,4 @@ case "$1" in
 	exit 3
 	;;
 esac
+exit 0

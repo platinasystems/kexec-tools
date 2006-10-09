@@ -25,12 +25,18 @@ case $host_cpu in
 	powerpc )
 		host_cpu="ppc"
 		;;
+	powerpc64 )
+		host_cpu="ppc64"
+		;;
+	s390x )
+		host_cpu="s390"
+		;;
 	* ) 
 		host_cpu="$host_cpu"
 		;;
 esac
 case $host_cpu in
-	i386|ppc|x86_64|alpha|ppc64|ia64)
+	i386|ppc|x86_64|alpha|ppc64|ia64|s390)
 		;;
 	* )
 		AC_MSG_ERROR([ unsupported architecture $host_cpu])
@@ -45,6 +51,13 @@ if test "${host_alias}" ; then
 	OBJDIR="$OBJDIR-${host_alias}"
 fi 
 EXTRA_CFLAGS=""
+
+# Check whether ppc64. Add -m64 for building 64-bit binary
+# Add -mcall-aixdesc to generate dot-symbols as in gcc 3.3.3
+if test "$ARCH" = ppc64; then
+  EXTRA_CFLAGS="$EXTRA_CFLAGS -m64 -mcall-aixdesc"
+fi;
+
 AC_ARG_WITH([objdir], AC_HELP_STRING([--with-objdir=<dir>],[select directory for object files]),
 	[ OBJDIR="$withval" ], [ OBJDIR="$OBJDIR" ])
 

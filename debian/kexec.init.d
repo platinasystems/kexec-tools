@@ -2,11 +2,12 @@
 ### BEGIN INIT INFO
 # Provides:		kexec
 # Required-Start:	kexec-load
-# Required-Stop:   
+# Required-Stop:   	kexec-load
 # Should-Start:
-# Default-Start:
+# Should-Stop:
+# Default-Start:	0 1 2 3 4 5
 # Default-Stop:		6
-# Short-Description: Execute the reboot command with kexec.
+# Short-Description: Execute the kexec -e command to reboot system
 # Description:
 ### END INIT INFO
 
@@ -17,12 +18,12 @@ PATH=/usr/sbin:/usr/bin:/sbin:/bin
 test -r /etc/default/kexec && . /etc/default/kexec
 
 do_stop () {
-    if [ "$USE_KEXEC" = 1 ]
-    then
-	log_action_msg "Will now restart"
+	test "$USE_KEXEC" = 1 || exit 0
+	test -x /sbin/kexec || exit 0
+
+	log_action_msg "Will now restart with kexec"
         kexec -e
         log_failure_msg "kexec failed"
-    fi
 }
 
 case "$1" in
@@ -41,3 +42,4 @@ case "$1" in
 	exit 3
 	;;
 esac
+exit 0
