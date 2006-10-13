@@ -18,15 +18,6 @@ diff -urN kexec-tools-1.101/AUTHORS new/AUTHORS
 diff -urN kexec-tools-1.101/kexec_test/Makefile new/kexec_test/Makefile
 --- kexec-tools-1.101/kexec-tools-1.101/kexec_test/Makefile	2004-12-16 04:05:57.000000000 -0700
 +++ new/kexec-tools-1.101/kexec_test/Makefile	2006-10-03 10:48:30.000000000 -0600
-@@ -9,7 +9,7 @@
- KEXEC_TEST_SRCS:= $(KEXEC_TEST_S_SRCS)
- KEXEC_TEST_OBJS:= $(KEXEC_TEST_S_OBJS)
- KEXEC_TEST_DEPS:= $(KEXEC_TEST_S_DEPS)
--KEXEC_TEST:=$(PKGLIBDIR)/kexec_test
-+KEXEC_TEST:=$(PKGDATADIR)/kexec_test
- 
- include $(KEXEC_TEST_DEPS)
- 
 @@ -28,3 +28,4 @@
  $(KEXEC_TEST): $(KEXEC_TEST_OBJS) 
  	mkdir -p $(@D)
@@ -44,18 +35,14 @@ diff -urN kexec-tools-1.101/Makefile new/Makefile
  MAN1DIR=$(MANDIR)/man1
  MAN2DIR=$(MANDIR)/man2
  MAN3DIR=$(MANDIR)/man3
-@@ -42,10 +42,10 @@
+@@ -42,8 +42,8 @@
  PKGLIBDIR=$(LIBDIR)/$(PACKAGE)
  PKGINCLUDEIR=$(INCLUDEDIR)/$(PACKAGE)
  
 -MAN_PAGES:= kexec/kexec.8
 -MAN_PAGES+= kdump/kdump.8
--BINARIES_i386:=  $(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
--BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
 +MAN_PAGES:= $(MANDIR)/man8/kexec.8
 +MAN_PAGES+= $(MANDIR)/man8/kdump.8
-+BINARIES_i386:=  $(SBINDIR)/kexec $(PKGDATADIR)/kexec_test
-+BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGDATADIR)/kexec_test
+ BINARIES_i386:=  $(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
+ BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
  BINARIES:=$(SBINDIR)/kexec $(SBINDIR)/kdump $(BINARIES_$(ARCH)) 
- 
- TARGETS:=$(BINARIES) $(MAN_PAGES)

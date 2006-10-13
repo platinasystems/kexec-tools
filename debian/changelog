@@ -1,3 +1,9 @@
+kexec-tools (1.101-kdump10-2) unstable; urgency=low
+
+  * Moved the install location for kexec_test to /usr/lib (closes: Bug#392395)
+
+ -- Khalid Aziz <khalid@debian.org>  Fri, 13 Oct 2006 08:31:16 -0600
+
 kexec-tools (1.101-kdump10-1) unstable; urgency=low
 
   * Applied -kdump10 patch from http://lse.sf.net/kdump

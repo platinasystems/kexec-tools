@@ -24,7 +24,7 @@ configure: patch configure-stamp
 configure-stamp: 
 	dh_testdir
 	# Add here commands to configure the package.
-	(cd kexec-tools-1.101; ./configure --sbindir=/sbin --mandir=/usr/share/man --datadir=/usr/share)
+	(cd kexec-tools-1.101; ./configure --prefix=/usr --sbindir=/sbin --mandir=/usr/share/man --datadir=/usr/share)
 
 	touch configure-stamp
 
