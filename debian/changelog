@@ -1,3 +1,9 @@
+kexec-tools (20070330-1) experimental; urgency=low
+
+  * New upstream version from Simon Horman's kexec-tools-testing tree. 
+
+ -- Khalid Aziz <khalid@debian.org>  Fri, 30 Mar 2007 09:32:27 -0600
+
 kexec-tools (1.101-kdump10-2) unstable; urgency=low
 
   * Moved the install location for kexec_test to /usr/lib (closes: Bug#392395)

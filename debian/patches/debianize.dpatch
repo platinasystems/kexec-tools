@@ -5,27 +5,17 @@
 ## DP: This patch adds fixes to keep lintian happy
 
 @DPATCH@
-diff -urN kexec-tools-1.101/AUTHORS new/AUTHORS
---- kexec-tools-1.101/kexec-tools-1.101/AUTHORS	2004-12-20 04:33:50.000000000 -0700
-+++ new/kexec-tools-1.101/AUTHORS	2006-10-03 09:45:34.000000000 -0600
-@@ -3,4 +3,4 @@
- Jesse Barnes <jbarnes@sgi.com>
- Khalid Aziz <khalid.aziz@hp.com>
- Hariprasad Nellitheertha <hari@in.ibm.com>
--Tim Deegan <tjd21@cl.cam.ac.uk>
-\ No newline at end of file
-+Tim Deegan <tjd21@cl.cam.ac.uk>
-diff -urN kexec-tools-1.101/kexec_test/Makefile new/kexec_test/Makefile
---- kexec-tools-1.101/kexec-tools-1.101/kexec_test/Makefile	2004-12-16 04:05:57.000000000 -0700
-+++ new/kexec-tools-1.101/kexec_test/Makefile	2006-10-03 10:48:30.000000000 -0600
+diff -urN --exclude=debian kexec-tools-0.20070319.rc/kexec_test/Makefile kexec-tools-testing-20070319-rc/kexec_test/Makefile
+--- kexec-tools-0.20070319.rc/kexec_test/Makefile	2007-03-07 01:52:54.000000000 -0700
++++ kexec-tools-testing-20070319-rc/kexec_test/Makefile	2007-03-29 17:15:52.000000000 -0600
 @@ -28,3 +28,4 @@
  $(KEXEC_TEST): $(KEXEC_TEST_OBJS) 
  	mkdir -p $(@D)
  	$(LD) -m elf_i386 -e _start -Ttext $(RELOC) $(KEXEC_TEST_OBJS) -o $@
 +	strip $@
-diff -urN kexec-tools-1.101/Makefile new/Makefile
---- kexec-tools-1.101/kexec-tools-1.101/Makefile	2006-10-03 11:44:14.000000000 -0600
-+++ new/kexec-tools-1.101/Makefile	2006-10-03 10:39:36.000000000 -0600
+diff -urN --exclude=debian kexec-tools-0.20070319.rc/Makefile kexec-tools-testing-20070319-rc/Makefile
+--- kexec-tools-0.20070319.rc/Makefile	2007-03-18 22:38:50.000000000 -0600
++++ kexec-tools-testing-20070319-rc/Makefile	2007-03-29 17:17:07.000000000 -0600
 @@ -27,7 +27,7 @@
  LOCALSTATEDIR=$(PREFIX)/var
  LIBDIR=$(PREFIX)/lib

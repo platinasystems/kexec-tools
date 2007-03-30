@@ -1,7 +1,9 @@
 This package was debianized by Khalid Aziz <khalid_aziz@hp.com> on
 Wed, 27 Jul 2005 10:55:17 -0600.
 
-It was downloaded from http://www.xmission.com/~ebiederm/files/kexec/
+It was originally downloaded from 
+<http://www.xmission.com/~ebiederm/files/kexec/>. Version 20070330 was 
+downloaded from <http://www.kernel.org/pub/linux/kernel/people/horms/kexec-tools/>
 
 Copyright: Eric Biederman (ebiederm@xmission.com)
 
