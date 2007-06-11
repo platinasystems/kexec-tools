@@ -2,7 +2,7 @@ Source: kexec-tools
 Section: admin
 Priority: optional
 Maintainer: Khalid Aziz <khalid@debian.org>
-Build-Depends: debhelper (>= 4.0.0), dpatch, gnu-efi (>=3.0a-4)[ia64]
+Build-Depends: debhelper (>= 4.0.0), dpatch, gnu-efi (>=3.0a-4)[ia64], libz-dev[ia64]
 Standards-Version: 3.7.2
 
 Package: kexec-tools

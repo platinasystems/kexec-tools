@@ -2,7 +2,7 @@
 # sourced by /etc/init.d/kexec and /etc/init.d/kexec-load
 
 # Don't use it by default
-USE_KEXEC=0
+USE_KEXEC=1
 
 # Kernel and initrd image
 KERNEL_IMAGE="/vmlinuz"

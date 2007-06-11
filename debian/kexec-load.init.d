@@ -1,11 +1,11 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:		kexec-load
-# Required-Start:	$local_fs
-# Required-Stop:	$local_fs
+# Required-Start:
+# Required-Stop:	$local_fs kexec
 # Should-Start:
 # Should-Stop:
-# Default-Start:	0 1 2 3 4 5
+# Default-Start:
 # Default-Stop:		6
 # Short-Description: Load kernel image with kexec
 # Description:

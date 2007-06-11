@@ -1,11 +1,11 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:		kexec
-# Required-Start:	kexec-load
-# Required-Stop:   	kexec-load
+# Required-Start:	
+# Required-Stop:   	reboot
 # Should-Start:
 # Should-Stop:
-# Default-Start:	0 1 2 3 4 5
+# Default-Start:
 # Default-Stop:		6
 # Short-Description: Execute the kexec -e command to reboot system
 # Description:
