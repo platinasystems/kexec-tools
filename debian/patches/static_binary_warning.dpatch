@@ -1,0 +1,31 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## static_binary_warning.dpatch by  <khalid@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: This patch adds fixes to keep lintian happy
+
+@DPATCH@
+--- kexec-tools-0.20070330.orig/Makefile	2007-10-29 12:58:09.000000000 -0600
++++ kexec-tools-0.20070330/Makefile	2007-10-29 12:58:29.000000000 -0600
+@@ -44,8 +44,8 @@ PKGINCLUDEIR=$(INCLUDEDIR)/$(PACKAGE)
+ 
+ MAN_PAGES:= $(MANDIR)/man8/kexec.8
+ MAN_PAGES+= $(MANDIR)/man8/kdump.8
+-BINARIES_i386:=  $(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
+-BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
++BINARIES_i386:=  $(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test.static
++BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test.static
+ BINARIES:=$(SBINDIR)/kexec $(SBINDIR)/kdump $(BINARIES_$(ARCH)) 
+ 
+ TARGETS:=$(BINARIES) $(MAN_PAGES)
+--- kexec-tools-0.20070330/kexec_test.orig/Makefile	2007-10-29 13:01:34.000000000 -0600
++++ kexec-tools-0.20070330/kexec_test/Makefile	2007-10-29 12:50:31.000000000 -0600
+@@ -9,7 +9,7 @@ KEXEC_TEST_S_DEPS:=$(patsubst %.S, $(OBJ
+ KEXEC_TEST_SRCS:= $(KEXEC_TEST_S_SRCS)
+ KEXEC_TEST_OBJS:= $(KEXEC_TEST_S_OBJS)
+ KEXEC_TEST_DEPS:= $(KEXEC_TEST_S_DEPS)
+-KEXEC_TEST:=$(PKGLIBDIR)/kexec_test
++KEXEC_TEST:=$(PKGLIBDIR)/kexec_test.static
+ 
+ include $(KEXEC_TEST_DEPS)
+ 

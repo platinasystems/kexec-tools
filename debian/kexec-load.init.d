@@ -18,8 +18,9 @@ PATH=/usr/sbin:/usr/bin:/sbin:/bin
 test -r /etc/default/kexec && . /etc/default/kexec
 
 do_stop () {
-	test "$USE_KEXEC" = 1 || exit 0
+	test "$LOAD_KEXEC" = 1 || exit 0
 	test -x /sbin/kexec || exit 0
+	test "x`cat /sys/kernel/kexec_loaded`y" == "x1y" && exit 0
 
 	REAL_APPEND="$APPEND"
 

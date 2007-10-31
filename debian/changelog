@@ -1,3 +1,13 @@
+kexec-tools (20070330-3) unstable; urgency=low
+
+  * Made command to strip kexec_test binary conditional (closes: Bug#437251)
+  * Removed mv command that caused build failure on a few architectures 
+    (closes: Bug#441128)
+  * Dropped powerpc and alpha architectures from supported arch list (closes:
+    Bug#338846)
+
+ -- Khalid Aziz <khalid@debian.org>  Wed, 31 Oct 2007 15:12:11 -0600
+
 kexec-tools (20070330-2) unstable; urgency=low
 
   * Changed /etc/default/kexec to enable kexec reboots by default 
