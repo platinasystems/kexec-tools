@@ -3,8 +3,7 @@
 # Provides:		kexec
 # Required-Start:	
 # Required-Stop:   	reboot
-# Should-Start:
-# Should-Stop:
+# X-Stop-After:		umountroot
 # Default-Start:
 # Default-Stop:		6
 # Short-Description: Execute the kexec -e command to reboot system
@@ -18,7 +17,7 @@ PATH=/usr/sbin:/usr/bin:/sbin:/bin
 test -r /etc/default/kexec && . /etc/default/kexec
 
 do_stop () {
-	test "x`cat /sys/kernel/kexec_loaded`y" == "x1y" || exit 0
+	test "x`cat /sys/kernel/kexec_loaded`y" = "x1y" || exit 0
 	test -x /sbin/kexec || exit 0
 
 	log_action_msg "Will now restart with kexec"

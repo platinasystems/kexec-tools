@@ -1,4 +1,4 @@
-#include <stdarg.h>
+
 #include <limits.h>
 #include <stdint.h>
 #include <purgatory.h>

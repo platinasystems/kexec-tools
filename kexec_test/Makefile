@@ -2,29 +2,39 @@
 # kexec_test Debugging payload to be certain the infrastructure works
 #
 RELOC:=0x10000
-KEXEC_TEST_S_SRCS:= kexec_test/kexec_test16.S kexec_test/kexec_test.S
-KEXEC_TEST_S_TEMPS:=$(patsubst %.S, $(OBJDIR)/%.s, $(KEXEC_TEST_S_SRCS))
-KEXEC_TEST_S_OBJS:=$(patsubst $(OBJDIR)/%.s, $(OBJDIR)/%.o, $(KEXEC_TEST_S_TEMPS))
-KEXEC_TEST_S_DEPS:=$(patsubst %.S, $(OBJDIR)/%.d, $(KEXEC_TEST_S_SRCS))
-KEXEC_TEST_SRCS:= $(KEXEC_TEST_S_SRCS)
-KEXEC_TEST_OBJS:= $(KEXEC_TEST_S_OBJS)
-KEXEC_TEST_DEPS:= $(KEXEC_TEST_S_DEPS)
-KEXEC_TEST:=$(PKGLIBDIR)/kexec_test
+KEXEC_TEST_SRCS:= kexec_test/kexec_test16.S kexec_test/kexec_test.S
 
-include $(KEXEC_TEST_DEPS)
+dist += kexec_test/Makefile $(KEXEC_TEST_SRCS)				\
+	kexec_test/x86-setup-legacy-pic.S
 
-$(KEXEC_TEST_S_DEPS): $(OBJDIR)/%.d: %.S
+BUILD_KEXEC_TEST = no
+ifeq ($(ARCH),i386)
+BUILD_KEXEC_TEST = yes
+endif
+ifeq ($(ARCH),x86_64)
+BUILD_KEXEC_TEST = yes
+endif
+
+ifeq ($(BUILD_KEXEC_TEST),yes)
+
+KEXEC_TEST_OBJS = $(call objify, $(KEXEC_TEST_SRCS))
+KEXEC_TEST_DEPS = $(call depify, $(KEXEC_TEST_OBJS))
+
+KEXEC_TEST = $(PKGLIBDIR)/kexec_test
+
+clean += $(KEXEC_TEST_OBJS) $(KEXEC_TEST_DEPS) $(KEXEC_TEST)
+
+-include $(KEXEC_TEST_DEPS)
+
+$(KEXEC_TEST): CPPFLAGS+=-DRELOC=$(RELOC)
+$(KEXEC_TEST): ASFLAGS+=-m32
+#$(KEXEC_TEST): LDFLAGS=-m32 -Wl,-e -Wl,_start -Wl,-Ttext -Wl,$(RELOC) \
+#		       -nostartfiles
+$(KEXEC_TEST): LDFLAGS=-melf_i386 -e _start -Ttext $(RELOC)
+
+$(KEXEC_TEST): $(KEXEC_TEST_OBJS)
 	mkdir -p $(@D)
-	$(CC) -m32 $(CFLAGS) $(EXTRA_CFLAGS) -M $< | sed -e 's|$(patsubst %.d,%.o,$(@F))|$(patsubst %.d,%.o,$(@))|' > $@
+	#$(LINK.o) -o $@ $^
+	$(LD) $(LDFLAGS) -o $@ $^
 
-$(KEXEC_TEST_S_TEMPS): $(OBJDIR)/%.s: %.S 
-	mkdir -p $(@D)
-	$(CPP) $(CPPFLAGS) $(EXTRA_CPPFLAGS) -DRELOC=$(RELOC) $< > $@
-
-$(KEXEC_TEST_S_OBJS): $(OBJDIR)/%.o: $(OBJDIR)/%.s 
-	mkdir -p $(@D)
-	$(AS) --32 -o $@ $<
-
-$(KEXEC_TEST): $(KEXEC_TEST_OBJS) 
-	mkdir -p $(@D)
-	$(LD) -m elf_i386 -e _start -Ttext $(RELOC) $(KEXEC_TEST_OBJS) -o $@
+endif

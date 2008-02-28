@@ -1,6 +1,8 @@
 #ifndef KEXEC_H
 #define KEXEC_H
 
+#include "config.h"
+
 #include <sys/types.h>
 #include <stdint.h>
 #define USE_BSD
@@ -162,7 +164,8 @@ extern int file_types;
 #define OPT_PANIC		'p'
 #define OPT_MEM_MIN             256
 #define OPT_MEM_MAX             257
-#define OPT_MAX			258
+#define OPT_REUSE_INITRD	258
+#define OPT_MAX			259
 #define KEXEC_OPTIONS \
 	{ "help",		0, 0, OPT_HELP }, \
 	{ "version",		0, 0, OPT_VERSION }, \
@@ -175,6 +178,7 @@ extern int file_types;
 	{ "load-panic",         0, 0, OPT_PANIC }, \
 	{ "mem-min",		1, 0, OPT_MEM_MIN }, \
 	{ "mem-max",		1, 0, OPT_MEM_MAX }, \
+	{ "reuseinitrd",	0, 0, OPT_REUSE_INITRD }, \
 
 #define KEXEC_OPT_STR "hvdfxluet:p"
 
@@ -195,7 +199,7 @@ extern unsigned char purgatory[];
 extern size_t purgatory_size;
 
 #define BOOTLOADER "kexec"
-#define BOOTLOADER_VERSION VERSION
+#define BOOTLOADER_VERSION PACKAGE_VERSION
 
 void arch_usage(void);
 int arch_process_options(int argc, char **argv);
@@ -203,22 +207,23 @@ int arch_compat_trampoline(struct kexec_info *info);
 void arch_update_purgatory(struct kexec_info *info);
 int is_crashkernel_mem_reserved(void);
 
-int kexec_iomem_for_each_line(char *match,
+int kexec_iomem_for_each_line(char *match, int machine,
 			      int (*callback)(void *data,
 					      int nr,
 					      char *str,
 					      unsigned long base,
 					      unsigned long length),
 			      void *data);
-int parse_iomem_single(char *str, uint64_t *start, uint64_t *end);
-
+int parse_iomem_single(char *str, int machine, uint64_t *start, uint64_t *end);
+const char * proc_iomem(int machine);
 
 #define MAX_LINE	160
 
 #ifdef DEBUG
-#define dfprintf(args...)	do {fprintf(args);} while(0)
+#define dbgprintf(_args...) do {printf(_args);} while(0)
 #else
-#define dfprintf(args...)	do { } while(0)
+static inline int __attribute__ ((format (printf, 1, 2)))
+	dbgprintf(const char *fmt, ...) {return 0;}
 #endif
 
 #endif /* KEXEC_H */

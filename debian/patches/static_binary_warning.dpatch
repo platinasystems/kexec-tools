@@ -5,9 +5,22 @@
 ## DP: This patch adds fixes to keep lintian happy
 
 @DPATCH@
---- kexec-tools-0.20070330.orig/Makefile	2007-10-29 12:58:09.000000000 -0600
-+++ kexec-tools-0.20070330/Makefile	2007-10-29 12:58:29.000000000 -0600
-@@ -44,8 +44,8 @@ PKGINCLUDEIR=$(INCLUDEDIR)/$(PACKAGE)
+diff -urN --exclude=debian kexec-tools-testing-20080227/kexec_test/Makefile kexec-tools-20080227.debian/kexec_test/Makefile
+--- kexec-tools-testing-20080227/kexec_test/Makefile	2008-02-21 01:09:02.000000000 -0700
++++ kexec-tools-20080227.debian/kexec_test/Makefile	2008-02-27 10:12:20.000000000 -0700
+@@ -20,7 +20,7 @@
+ KEXEC_TEST_OBJS = $(call objify, $(KEXEC_TEST_SRCS))
+ KEXEC_TEST_DEPS = $(call depify, $(KEXEC_TEST_OBJS))
+ 
+-KEXEC_TEST = $(PKGLIBDIR)/kexec_test
++KEXEC_TEST = $(PKGLIBDIR)/kexec_test.static
+ 
+ clean += $(KEXEC_TEST_OBJS) $(KEXEC_TEST_DEPS) $(KEXEC_TEST)
+ 
+diff -urN --exclude=debian kexec-tools-testing-20080227/Makefile.in kexec-tools-20080227.debian/Makefile.in
+--- kexec-tools-testing-20080227/Makefile.in	2008-02-27 10:12:52.000000000 -0700
++++ kexec-tools-20080227.debian/Makefile.in	2008-02-27 10:12:08.000000000 -0700
+@@ -103,8 +103,8 @@
  
  MAN_PAGES:= $(MANDIR)/man8/kexec.8
  MAN_PAGES+= $(MANDIR)/man8/kdump.8
@@ -15,17 +28,6 @@
 -BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test
 +BINARIES_i386:=  $(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test.static
 +BINARIES_x86_64:=$(SBINDIR)/kexec $(PKGLIBDIR)/kexec_test.static
- BINARIES:=$(SBINDIR)/kexec $(SBINDIR)/kdump $(BINARIES_$(ARCH)) 
+ BINARIES:=$(SBINDIR)/kexec $(SBINDIR)/kdump $(BINARIES_$(ARCH))
  
  TARGETS:=$(BINARIES) $(MAN_PAGES)
---- kexec-tools-0.20070330/kexec_test.orig/Makefile	2007-10-29 13:01:34.000000000 -0600
-+++ kexec-tools-0.20070330/kexec_test/Makefile	2007-10-29 12:50:31.000000000 -0600
-@@ -9,7 +9,7 @@ KEXEC_TEST_S_DEPS:=$(patsubst %.S, $(OBJ
- KEXEC_TEST_SRCS:= $(KEXEC_TEST_S_SRCS)
- KEXEC_TEST_OBJS:= $(KEXEC_TEST_S_OBJS)
- KEXEC_TEST_DEPS:= $(KEXEC_TEST_S_DEPS)
--KEXEC_TEST:=$(PKGLIBDIR)/kexec_test
-+KEXEC_TEST:=$(PKGLIBDIR)/kexec_test.static
- 
- include $(KEXEC_TEST_DEPS)
- 

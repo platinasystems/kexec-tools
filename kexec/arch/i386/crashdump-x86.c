@@ -59,7 +59,7 @@ static struct memory_range crash_reserved_mem;
  */
 static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 {
-	const char iomem[]= "/proc/iomem";
+	const char *iomem = proc_iomem(1);
 	int memory_ranges = 0;
 	char line[MAX_LINE];
 	FILE *fp;
@@ -486,6 +486,23 @@ static struct crash_elf_info elf_info32 =
 	get_note_info: get_crash_notes,
 };
 
+static enum coretype get_core_type(struct kexec_info *info,
+				   struct memory_range *range, int ranges)
+{
+	if (info->kexec_flags & KEXEC_ARCH_X86_64)
+		return CORE_TYPE_ELF64;
+	else {
+		/* fall back to default */
+		if (ranges == 0)
+			return CORE_TYPE_ELF64;
+
+		if (range[ranges - 1].end > 0xFFFFFFFFUL)
+			return CORE_TYPE_ELF64;
+		else
+			return CORE_TYPE_ELF32;
+	}
+}
+
 /* Loads additional segments in case of a panic kernel is being loaded.
  * One segment for backup region, another segment for storing elf headers
  * for crash memory image.
@@ -501,6 +518,15 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	if (get_crash_memory_ranges(&mem_range, &nr_ranges) < 0)
 		return -1;
 
+	/*
+	 * if the core type has not been set on command line, set it here
+	 * automatically
+	 */
+	if (arch_options.core_header_type == CORE_TYPE_UNDEF) {
+		arch_options.core_header_type =
+			get_core_type(info, mem_range, nr_ranges);
+	}
+
 	/* Memory regions which panic kernel can safely use to boot into */
 	sz = (sizeof(struct memory_range) * (KEXEC_MAX_SEGMENTS + 1));
 	memmap_p = xmalloc(sz);
@@ -515,8 +541,7 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	memset(tmp, 0, sz);
 	info->backup_start = add_buffer(info, tmp, sz, sz, align,
 				0, max_addr, -1);
-	dfprintf(stdout, "Created backup segment at 0x%lx\n",
-				info->backup_start);
+	dbgprintf("Created backup segment at 0x%lx\n", info->backup_start);
 	if (delete_memmap(memmap_p, info->backup_start, sz) < 0)
 		return -1;
 
@@ -545,7 +570,7 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	 */
 	elfcorehdr = add_buffer(info, tmp, sz, 16*1024, align, min_base,
 							max_addr, -1);
-	dfprintf(stdout, "Created elf header segment at 0x%lx\n", elfcorehdr);
+	dbgprintf("Created elf header segment at 0x%lx\n", elfcorehdr);
 	if (delete_memmap(memmap_p, elfcorehdr, sz) < 0)
 		return -1;
 	cmdline_add_memmap(mod_cmdline, memmap_p);
@@ -557,6 +582,6 @@ int is_crashkernel_mem_reserved(void)
 {
 	uint64_t start, end;
 
-	return parse_iomem_single("Crash kernel\n", &start, &end) == 0 ?
+	return parse_iomem_single("Crash kernel\n", 1, &start, &end) == 0 ?
 	  (start != end) : 0;
 }

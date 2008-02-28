@@ -2,6 +2,7 @@
 # Purgatory s390
 #
 
-PURGATORY_C_SRCS+=
-PURGATORY_S_SRCS+=
+s390_PURGATORY_SRCS =
+
+dist += purgatory/arch/s390/Makefile $(s390_PURGATORY_SRCS)
 

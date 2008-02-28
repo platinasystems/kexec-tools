@@ -41,14 +41,11 @@ static struct memory_range *base_memory_range = NULL;
 static unsigned long long rmo_top;
 unsigned long long memory_max = 0;
 static int nr_memory_ranges, nr_exclude_ranges;
-unsigned long long crash_base, crash_size;
+uint64_t crash_base, crash_size;
 unsigned int rtas_base, rtas_size;
 int max_memory_ranges;
 
-static int sort_base_ranges();
-
-
-static void cleanup_memory_ranges()
+static void cleanup_memory_ranges(void)
 {
 	if (memory_range)
 		free(memory_range);
@@ -64,7 +61,7 @@ static void cleanup_memory_ranges()
  * Allocate memory for various data structures used to hold
  * values of different memory ranges
  */
-static int alloc_memory_ranges()
+static int alloc_memory_ranges(void)
 {
 	int memory_range_len;
 
@@ -101,11 +98,11 @@ err1:
 }
 
 /*
- * Count the memory@ nodes under /proc/device-tree and populate the
+ * Count the memory nodes under /proc/device-tree and populate the
  * max_memory_ranges variable. This variable replaces MAX_MEMORY_RANGES
  * macro used earlier.
  */
-static int count_memory_ranges()
+static int count_memory_ranges(void)
 {
 	char device_tree[256] = "/proc/device-tree/";
 	struct dirent *dentry;
@@ -118,22 +115,52 @@ static int count_memory_ranges()
 
 	while ((dentry = readdir(dir)) != NULL) {
 		if (strncmp(dentry->d_name, "memory@", 7) &&
-		    strncmp(dentry->d_name, "pci@", 4))
+			strcmp(dentry->d_name, "memory") &&
+			strncmp(dentry->d_name, "pci@", 4))
 			continue;
 		max_memory_ranges++;
 	}
+	/* need to add extra region for retained initrd */
+	if (reuse_initrd) {
+		max_memory_ranges++;
+	}
+
 	closedir(dir);
 
 	return 0;
 }
 
+/* Sort the base ranges in memory - this is useful for ensuring that our
+ * ranges are in ascending order, even if device-tree read of memory nodes
+ * is done differently. Also, could be used for other range coalescing later
+ */
+static int sort_base_ranges(void)
+{
+	int i, j;
+	unsigned long long tstart, tend;
+
+	for (i = 0; i < nr_memory_ranges - 1; i++) {
+		for (j = 0; j < nr_memory_ranges - i - 1; j++) {
+			if (base_memory_range[j].start > base_memory_range[j+1].start) {
+				tstart = base_memory_range[j].start;
+				tend = base_memory_range[j].end;
+				base_memory_range[j].start = base_memory_range[j+1].start;
+				base_memory_range[j].end = base_memory_range[j+1].end;
+				base_memory_range[j+1].start = tstart;
+				base_memory_range[j+1].end = tend;
+			}
+		}
+	}
+	return 0;
+}
+
 /* Get base memory ranges */
-static int get_base_ranges()
+static int get_base_ranges(void)
 {
 	int local_memory_ranges = 0;
 	char device_tree[256] = "/proc/device-tree/";
 	char fname[256];
-	char buf[MAXBYTES-1];
+	char buf[MAXBYTES];
 	DIR *dir, *dmem;
 	FILE *file;
 	struct dirent *dentry, *mentry;
@@ -144,7 +171,8 @@ static int get_base_ranges()
 		return -1;
 	}
 	while ((dentry = readdir(dir)) != NULL) {
-		if (strncmp(dentry->d_name, "memory@", 7))
+		if (strncmp(dentry->d_name, "memory@", 7) &&
+			strcmp(dentry->d_name, "memory"))
 			continue;
 		strcpy(fname, device_tree);
 		strcat(fname, dentry->d_name);
@@ -175,13 +203,13 @@ static int get_base_ranges()
 				break;
 			}
 			base_memory_range[local_memory_ranges].start =
-				((unsigned long long *)buf)[0];
+				((uint64_t *)buf)[0];
 			base_memory_range[local_memory_ranges].end  =
 				base_memory_range[local_memory_ranges].start +
-				((unsigned long long *)buf)[1];
+				((uint64_t *)buf)[1];
 			base_memory_range[local_memory_ranges].type = RANGE_RAM;
 			local_memory_ranges++;
-			dfprintf(stderr, "%016llx-%016llx : %x\n",
+			dbgprintf("%016llx-%016llx : %x\n",
 				base_memory_range[local_memory_ranges-1].start,
 				base_memory_range[local_memory_ranges-1].end,
 				base_memory_range[local_memory_ranges-1].type);
@@ -199,35 +227,11 @@ static int get_base_ranges()
 	return 0;
 }
 
-/* Sort the base ranges in memory - this is useful for ensuring that our
- * ranges are in ascending order, even if device-tree read of memory nodes
- * is done differently. Also, could be used for other range coalescing later
- */
-static int sort_base_ranges()
-{
-	int i, j;
-	unsigned long long tstart, tend;
-
-	for (i = 0; i < nr_memory_ranges - 1; i++) {
-		for (j = 0; j < nr_memory_ranges - i - 1; j++) {
-			if (base_memory_range[j].start > base_memory_range[j+1].start) {
-				tstart = base_memory_range[j].start;
-				tend = base_memory_range[j].end;
-				base_memory_range[j].start = base_memory_range[j+1].start;
-				base_memory_range[j].end = base_memory_range[j+1].end;
-				base_memory_range[j+1].start = tstart;
-				base_memory_range[j+1].end = tend;
-			}
-		}
-	}
-	return 0;
-}
-
 /* Sort the exclude ranges in memory */
-static int sort_ranges()
+static int sort_ranges(void)
 {
 	int i, j;
-	unsigned long long tstart, tend;
+	uint64_t tstart, tend;
 	for (i = 0; i < nr_exclude_ranges - 1; i++) {
 		for (j = 0; j < nr_exclude_ranges - i - 1; j++) {
 			if (exclude_range[j].start > exclude_range[j+1].start) {
@@ -253,12 +257,14 @@ static int get_devtree_details(unsigned long kexec_flags)
 	unsigned int tce_size;
 	unsigned long long htab_base, htab_size;
 	unsigned long long kernel_end;
-	char buf[MAXBYTES-1];
+	unsigned long long initrd_start, initrd_end;
+	char buf[MAXBYTES];
 	char device_tree[256] = "/proc/device-tree/";
 	char fname[256];
 	DIR *dir, *cdir;
 	FILE *file;
 	struct dirent *dentry;
+	struct stat fstat;
 	int n, i = 0;
 
 	if ((dir = opendir(device_tree)) == NULL) {
@@ -268,7 +274,8 @@ static int get_devtree_details(unsigned long kexec_flags)
 
 	while ((dentry = readdir(dir)) != NULL) {
 		if (strncmp(dentry->d_name, "chosen", 6) &&
-			strncmp(dentry->d_name, "memory@0", 8) &&
+			strncmp(dentry->d_name, "memory@", 7) &&
+			strcmp(dentry->d_name, "memory") &&
 			strncmp(dentry->d_name, "pci@", 4) &&
 			strncmp(dentry->d_name, "rtas", 4))
 			continue;
@@ -276,24 +283,18 @@ static int get_devtree_details(unsigned long kexec_flags)
 		strcat(fname, dentry->d_name);
 		if ((cdir = opendir(fname)) == NULL) {
 			perror(fname);
-			closedir(dir);
-			return -1;
+			goto error_opendir;
 		}
 
 		if (strncmp(dentry->d_name, "chosen", 6) == 0) {
 			strcat(fname, "/linux,kernel-end");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_opencdir;
 			}
-			if (fread(&kernel_end, sizeof(unsigned long), 1, file) != 1) {
+			if (fread(&kernel_end, sizeof(uint64_t), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			fclose(file);
 
@@ -309,17 +310,12 @@ static int get_devtree_details(unsigned long kexec_flags)
 				strcat(fname, "/linux,crashkernel-base");
 				if ((file = fopen(fname, "r")) == NULL) {
 					perror(fname);
-					closedir(cdir);
-					closedir(dir);
-					return -1;
+					goto error_opencdir;
 				}
-				if (fread(&crash_base, sizeof(unsigned long), 1,
+				if (fread(&crash_base, sizeof(uint64_t), 1,
 						file) != 1) {
 					perror(fname);
-					fclose(file);
-					closedir(cdir);
-					closedir(dir);
-					return -1;
+					goto error_openfile;
 				}
 				fclose(file);
 
@@ -329,17 +325,12 @@ static int get_devtree_details(unsigned long kexec_flags)
 				strcat(fname, "/linux,crashkernel-size");
 				if ((file = fopen(fname, "r")) == NULL) {
 					perror(fname);
-					closedir(cdir);
-					closedir(dir);
-					return -1;
+					goto error_opencdir;
 				}
-				if (fread(&crash_size, sizeof(unsigned long), 1,
+				if (fread(&crash_size, sizeof(uint64_t), 1,
 						file) != 1) {
 					perror(fname);
-					fclose(file);
-					closedir(cdir);
-					closedir(dir);
-					return -1;
+					goto error_openfile;
 				}
 
 				if (crash_base > mem_min)
@@ -363,15 +354,11 @@ static int get_devtree_details(unsigned long kexec_flags)
 					continue;
                                 }
 				perror(fname);
-				closedir(dir);
-				return -1;
+				goto error_opendir;
 			}
-			if (fread(&htab_base, sizeof(unsigned long), 1, file) != 1) {
+			if (fread(&htab_base, sizeof(uint64_t), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			memset(fname, 0, sizeof(fname));
 			strcpy(fname, device_tree);
@@ -379,37 +366,73 @@ static int get_devtree_details(unsigned long kexec_flags)
 			strcat(fname, "/linux,htab-size");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_opencdir;
 			}
-			if (fread(&htab_size, sizeof(unsigned long), 1, file) != 1) {
+			if (fread(&htab_size, sizeof(uint64_t), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			/* Add htab address to exclude_range - NON-LPAR only */
 			exclude_range[i].start = htab_base;
 			exclude_range[i].end = htab_base + htab_size;
 			i++;
+
+			/* reserve the initrd_start and end locations. */
+			if (reuse_initrd) {
+				memset(fname, 0, sizeof(fname));
+				strcpy(fname, device_tree);
+				strcat(fname, dentry->d_name);
+				strcat(fname, "/linux,initrd-start");
+				if ((file = fopen(fname, "r")) == NULL) {
+					perror(fname);
+					goto error_opencdir;
+				}
+				/* check for 4 and 8 byte initrd offset sizes */
+				if (stat(fname, &fstat) != 0) {
+					perror(fname);
+					goto error_openfile;
+				}
+				if (fread(&initrd_start, fstat.st_size, 1, file) != 1) {
+					perror(fname);
+					goto error_openfile;
+				}
+				fclose(file);
+
+				memset(fname, 0, sizeof(fname));
+				strcpy(fname, device_tree);
+				strcat(fname, dentry->d_name);
+				strcat(fname, "/linux,initrd-end");
+				if ((file = fopen(fname, "r")) == NULL) {
+					perror(fname);
+					goto error_opencdir;
+				}
+				/* check for 4 and 8 byte initrd offset sizes */
+				if (stat(fname, &fstat) != 0) {
+					perror(fname);
+					goto error_openfile;
+				}
+				if (fread(&initrd_end, fstat.st_size, 1, file) != 1) {
+					perror(fname);
+					goto error_openfile;
+				}
+				fclose(file);
+
+				/* Add initrd address to exclude_range */
+				exclude_range[i].start = initrd_start;
+				exclude_range[i].end = initrd_end;
+				i++;
+			}
 		} /* chosen */
 
 		if (strncmp(dentry->d_name, "rtas", 4) == 0) {
 			strcat(fname, "/linux,rtas-base");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_opencdir;
 			}
 			if (fread(&rtas_base, sizeof(unsigned int), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			memset(fname, 0, sizeof(fname));
 			strcpy(fname, device_tree);
@@ -417,16 +440,11 @@ static int get_devtree_details(unsigned long kexec_flags)
 			strcat(fname, "/rtas-size");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_opencdir;
 			}
 			if (fread(&rtas_size, sizeof(unsigned int), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			closedir(cdir);
 			/* Add rtas to exclude_range */
@@ -437,20 +455,16 @@ static int get_devtree_details(unsigned long kexec_flags)
 				add_usable_mem_rgns(rtas_base, rtas_size);
 		} /* rtas */
 
-		if (strncmp(dentry->d_name, "memory@0", 8) == 0) {
+		if (!strncmp(dentry->d_name, "memory@", 7) ||
+			!strcmp(dentry->d_name, "memory")) {
 			strcat(fname, "/reg");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_opencdir;
 			}
 			if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			rmo_base = ((unsigned long long *)buf)[0];
 			rmo_top = rmo_base + ((unsigned long long *)buf)[1];
@@ -471,14 +485,11 @@ static int get_devtree_details(unsigned long kexec_flags)
 					continue;
 				}
 				perror(fname);
-				closedir(dir);
-				return -1;
+				goto error_opendir;
 			}
-			if (fread(&tce_base, sizeof(unsigned long), 1, file) != 1) {
+			if (fread(&tce_base, sizeof(uint64_t), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
+				goto error_openfile;
 				return -1;
 			}
 			memset(fname, 0, sizeof(fname));
@@ -487,16 +498,11 @@ static int get_devtree_details(unsigned long kexec_flags)
 			strcat(fname, "/linux,tce-size");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_opencdir;
 			}
 			if (fread(&tce_size, sizeof(unsigned int), 1, file) != 1) {
 				perror(fname);
-				fclose(file);
-				closedir(cdir);
-				closedir(dir);
-				return -1;
+				goto error_openfile;
 			}
 			/* Add tce to exclude_range - NON-LPAR only */
 			exclude_range[i].start = tce_base;
@@ -521,6 +527,14 @@ static int get_devtree_details(unsigned long kexec_flags)
 			exclude_range[k].end);
 #endif
 	return 0;
+
+error_openfile:
+	fclose(file);
+error_opencdir:
+	closedir(cdir);
+error_opendir:
+	closedir(dir);
+	return -1;
 }
 
 /* Setup a sorted list of memory ranges. */

@@ -12,8 +12,11 @@
 #include <fcntl.h>
 #include "kexec.h"
 #include "crashdump.h"
+#include "kexec-syscall.h"
 
-#ifdef HAVE_XENCTRL_H
+#include "config.h"
+
+#ifdef HAVE_LIBXENCTRL
 #include <xenctrl.h>
 #endif
 
@@ -35,7 +38,7 @@ int xen_present(void)
 unsigned long xen_architecture(struct crash_elf_info *elf_info)
 {
 	unsigned long machine = elf_info->machine;
-#ifdef HAVE_XENCTRL_H
+#ifdef HAVE_LIBXENCTRL
 	int xc, rc;
 	xen_capabilities_info_t capabilities;
 
@@ -90,16 +93,16 @@ int xen_get_nr_phys_cpus(void)
 	if (xen_phys_cpus)
 		return xen_phys_cpus;
 
-	if ((cpus = kexec_iomem_for_each_line(match, NULL, NULL))) {
+	if ((cpus = kexec_iomem_for_each_line(match, 1, NULL, NULL))) {
 		n = sizeof(struct crash_note_info) * cpus;
 		xen_phys_notes = malloc(n);
-		if (xen_phys_notes) {
-			memset(xen_phys_notes, 0, n);
-			kexec_iomem_for_each_line(match,
-						  xen_crash_note_callback,
-						  NULL);
+		if (!xen_phys_notes) {
+			fprintf(stderr, "failed to allocate xen_phys_notes.\n");
+			return -1;
 		}
-
+		memset(xen_phys_notes, 0, n);
+		kexec_iomem_for_each_line(match, 1,
+					  xen_crash_note_callback, NULL);
 		xen_phys_cpus = cpus;
 	}
 

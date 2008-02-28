@@ -2,6 +2,7 @@
 # Purgatory alpha
 #
 
-PURGATORY_C_SRCS+=
-PURGATORY_S_SRCS+=
+alpha_PURGATORY_SRCS =
+
+dist += purgatory/arch/alpha/Makefile $(alpha_PURGATORY_SRCS)
 

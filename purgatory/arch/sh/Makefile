@@ -1,7 +1,8 @@
 #
-# Purgatory alpha
+# Purgatory sh
 #
 
-PURGATORY_C_SRCS+=
-PURGATORY_S_SRCS+=
+sh_PURGATORY_SRCS =
+
+dist += purgatory/arch/sh/Makefile $(sh_PURGATORY_SRCS)
 

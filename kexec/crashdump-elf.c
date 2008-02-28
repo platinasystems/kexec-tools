@@ -4,22 +4,20 @@
 #endif
 
 #if (ELF_WIDTH == 64)
-#define dfprintf_phdr(fh, prefix, phdr)					\
+#define dbgprintf_phdr(prefix, phdr)					\
 do {									\
-	dfprintf((fh),							\
-		 "%s: p_type = %u, p_offset = 0x%lx p_paddr = 0x%lx "	\
-		 "p_vaddr = 0x%lx p_filesz = 0x%lx p_memsz = 0x%lx\n",	\
-		 (prefix), (phdr)->p_type, (phdr)->p_offset, (phdr)->p_paddr, \
-		 (phdr)->p_vaddr, (phdr)->p_filesz, (phdr)->p_memsz);	\
+	dbgprintf("%s: p_type = %u, p_offset = 0x%lx p_paddr = 0x%lx "	\
+		"p_vaddr = 0x%lx p_filesz = 0x%lx p_memsz = 0x%lx\n",	\
+		(prefix), (phdr)->p_type, (phdr)->p_offset, (phdr)->p_paddr, \
+		(phdr)->p_vaddr, (phdr)->p_filesz, (phdr)->p_memsz);	\
 } while(0)
 #else
-#define dfprintf_phdr(fh, prefix, phdr)					\
+#define dbgprintf_phdr(prefix, phdr)					\
 do {									\
-	dfprintf((fh),							\
-		 "%s: p_type = %u, p_offset = 0x%x " "p_paddr = 0x%x "	\
-		 "p_vaddr = 0x%x p_filesz = 0x%x p_memsz = 0x%x\n",	\
-		 (prefix), (phdr)->p_type, (phdr)->p_offset, (phdr)->p_paddr, \
-		 (phdr)->p_vaddr, (phdr)->p_filesz, (phdr)->p_memsz);	\
+	dbgprintf("%s: p_type = %u, p_offset = 0x%x " "p_paddr = 0x%x "	\
+		"p_vaddr = 0x%x p_filesz = 0x%x p_memsz = 0x%x\n",	\
+		(prefix), (phdr)->p_type, (phdr)->p_offset, (phdr)->p_paddr, \
+		(phdr)->p_vaddr, (phdr)->p_filesz, (phdr)->p_memsz);	\
 } while(0)
 #endif
 
@@ -36,6 +34,8 @@ int FUNC(struct kexec_info *info,
 	char *bufp;
 	long int nr_cpus = 0;
 	uint64_t notes_addr, notes_len;
+	uint64_t vmcoreinfo_addr, vmcoreinfo_len;
+	int has_vmcoreinfo = 0;
 	int (*get_note_info)(int cpu, uint64_t *addr, uint64_t *len);
 
 	if (xen_present())
@@ -47,7 +47,12 @@ int FUNC(struct kexec_info *info,
 		return -1;
 	}
 
-	sz = sizeof(EHDR) + nr_cpus * sizeof(PHDR) + ranges * sizeof(PHDR);
+	if (get_kernel_vmcoreinfo(&vmcoreinfo_addr, &vmcoreinfo_len) == 0) {
+		has_vmcoreinfo = 1;
+	}
+
+	sz = sizeof(EHDR) + (nr_cpus + has_vmcoreinfo) * sizeof(PHDR) +
+	     ranges * sizeof(PHDR);
 
 	/*
 	 * Certain architectures such as x86_64 and ia64 require a separate
@@ -145,7 +150,22 @@ int FUNC(struct kexec_info *info,
 
 		/* Increment number of program headers. */
 		(elf->e_phnum)++;
-		dfprintf_phdr(stdout, "Elf header", phdr);
+		dbgprintf_phdr("Elf header", phdr);
+	}
+
+	if (has_vmcoreinfo) {
+		phdr = (PHDR *) bufp;
+		bufp += sizeof(PHDR);
+		phdr->p_type	= PT_NOTE;
+		phdr->p_flags	= 0;
+		phdr->p_offset  = phdr->p_paddr = vmcoreinfo_addr;
+		phdr->p_vaddr   = 0;
+		phdr->p_filesz	= phdr->p_memsz	= vmcoreinfo_len;
+		/* Do we need any alignment of segments? */
+		phdr->p_align	= 0;
+
+		(elf->e_phnum)++;
+		dbgprintf_phdr("vmcoreinfo header", phdr);
 	}
 
 	/* Setup an PT_LOAD type program header for the region where
@@ -162,7 +182,7 @@ int FUNC(struct kexec_info *info,
 		phdr->p_filesz	= phdr->p_memsz	= info->kern_size;
 		phdr->p_align	= 0;
 		(elf->e_phnum)++;
-		dfprintf_phdr(stdout, "Kernel text Elf header", phdr);
+		dbgprintf_phdr("Kernel text Elf header", phdr);
 	}
 
 	/* Setup PT_LOAD type program header for every system RAM chunk.
@@ -203,9 +223,9 @@ int FUNC(struct kexec_info *info,
 
 		/* Increment number of program headers. */
 		(elf->e_phnum)++;
-		dfprintf_phdr(stdout, "Elf header", phdr);
+		dbgprintf_phdr("Elf header", phdr);
 	}
 	return 0;
 }
 
-#undef dfprintf_phdr
+#undef dbgprintf_phdr

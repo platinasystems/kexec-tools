@@ -134,9 +134,20 @@ int do_bzImage_load(struct kexec_info *info,
 		return -1;
 	}
 
+	if (setup_header.protocol_version >= 0x0206) {
+		if (command_line_len > setup_header.cmdline_size) {
+			dbgprintf("Kernel command line too long for kernel!\n");
+			return -1;
+		}
+	} else {
+		if (command_line_len > 255) {
+			dbgprintf("WARNING: This kernel may only support 255 byte command lines\n");
+		}
+	}
+
 	if (setup_header.protocol_version >= 0x0205) {
 		relocatable_kernel = setup_header.relocatable_kernel;
-		dfprintf(stdout, "bzImage is relocatable\n");
+		dbgprintf("bzImage is relocatable\n");
 	}
 
 	/* Can't use bzImage for crash dump purposes with real mode entry */
@@ -192,8 +203,7 @@ int do_bzImage_load(struct kexec_info *info,
 	else
 		elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
 					0x3000, 640*1024, -1, 0);
-	dfprintf(stdout, "Loaded purgatory at addr 0x%lx\n",
-				info->rhdr.rel_addr);
+	dbgprintf("Loaded purgatory at addr 0x%lx\n", info->rhdr.rel_addr);
 	/* The argument/parameter segment */
 	setup_size = kern16_size + command_line_len;
 	real_mode = xmalloc(setup_size);
@@ -215,7 +225,7 @@ int do_bzImage_load(struct kexec_info *info,
 		add_segment(info, real_mode, setup_size, SETUP_BASE, setup_size);
 		setup_base = SETUP_BASE;
 	}
-	dfprintf(stdout, "Loaded real-mode code and command line at 0x%lx\n",
+	dbgprintf("Loaded real-mode code and command line at 0x%lx\n",
 			setup_base);
 
 	/* Verify purgatory loads higher than the parameters */
@@ -247,7 +257,7 @@ int do_bzImage_load(struct kexec_info *info,
 				kernel32_load_addr, size);
 	}
 		
-	dfprintf(stdout, "Loaded 32bit kernel at 0x%lx\n", kernel32_load_addr);
+	dbgprintf("Loaded 32bit kernel at 0x%lx\n", kernel32_load_addr);
 
 	/* Tell the kernel what is going on */
 	setup_linux_bootloader_parameters(info, real_mode, setup_base,

@@ -4,70 +4,65 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(Makefile.conf.in)
+AC_INIT(kexec-tools-testing, 20080227)
 AC_CONFIG_AUX_DIR(./config)
+AC_CONFIG_HEADERS([include/config.h])
+
+AC_DEFINE_UNQUOTED(PACKAGE_DATE, "27th February 2008",
+		[Define to the release date of this package])
+
 
 dnl -- Compilation platform configuration
+dnl -- the host specifices the host machine for the kexec binary, the
+dnl -- the target specifies the architecture of the kernel to be kexeced.
 AC_CANONICAL_HOST
-dnl Currentl AC_CANONICAL_HOST is sufficient for my needs
-dnl as there are only a small number of targets that kexec
-dnl can support on a given host system.  If it stops making
-dnl sense compile support for all possible targets a given
-dnl host can support AC_CANONICAL_TARGET may help
-dnl AC_CANONICAL_TARGET
+AC_CANONICAL_TARGET
 
-
-dnl Compute host cpu
-case $host_cpu in 
-	i?86 )	
-		host_cpu="i386"
+dnl Compute ARCH from target cpu info
+case $target_cpu in
+	i?86 )
+		ARCH="i386"
 		;;
 	powerpc )
-		host_cpu="ppc"
+		ARCH="ppc"
 		;;
 	powerpc64 )
-		host_cpu="ppc64"
+		ARCH="ppc64"
 		;;
-	s390x )
-		host_cpu="s390"
+	arm* )
+		ARCH="arm"
 		;;
-	sh4|sh4a|sh3 )
-		host_cpu="sh"
+	s390x|s390 )
+		ARCH="s390"
 		;;
-	* ) 
-		host_cpu="$host_cpu"
+	sh4|sh4a|sh3|sh )
+		ARCH="sh"
 		;;
-esac
-case $host_cpu in
-	i386|ppc|x86_64|alpha|ppc64|ia64|s390|sh)
+	ia64|x86_64|alpha )
+		ARCH="$target_cpu"
 		;;
 	* )
-		AC_MSG_ERROR([ unsupported architecture $host_cpu])
+		AC_MSG_ERROR([unsupported architecture $target_cpu])
 		;;
 esac
-ARCH=$host_cpu
 
 dnl ---Options
 
 OBJDIR=`pwd`/objdir
 if test "${host_alias}" ; then
 	OBJDIR="$OBJDIR-${host_alias}"
-fi 
+fi
 
-EXTRA_CFLAGS='-Wall -g -fno-strict-aliasing $(CPPFLAGS) $(EXTRA_CPPFLAGS)'
-BUILD_CFLAGS='-O2 -Wall $(CPPFLAGS)'
-
-# Check whether ppc64. Add -m64 for building 64-bit binary
-# Add -mcall-aixdesc to generate dot-symbols as in gcc 3.3.3
-if test "$ARCH" = ppc64; then
-  EXTRA_CFLAGS="$EXTRA_CFLAGS -m64 -mcall-aixdesc"
-fi;
+BUILD_CFLAGS='-O2 -Wall'
+TARGET_CFLAGS='-O2 -Wall'
 
 AC_ARG_WITH([objdir], AC_HELP_STRING([--with-objdir=<dir>],[select directory for object files]),
 	[ OBJDIR="$withval" ], [ OBJDIR="$OBJDIR" ])
 
-AC_ARG_WITH([gamecube], AC_HELP_STRING([--with-gamecube],[enable gamecube support]),
-	[ EXTRA_CFLAGS="$EXTRA_CFLAGS -DCONFIG_GAMECUBE=1" ])
+AC_ARG_WITH([gamecube],
+		AC_HELP_STRING([--with-gamecube],[enable gamecube support]),
+		AC_DEFINE(WITH_GAMECUBE, 1,
+			[Define to include gamecube support]))
 
 AC_ARG_WITH([zlib], AC_HELP_STRING([--without-zlib],[disable zlib support]),
 	[ with_zlib="$withval"], [ with_zlib=yes ] )
@@ -81,11 +76,17 @@ dnl To specify a different compiler, just 'export CC=/path/to/compiler'
 AC_PROG_CC
 
 if test "${build}" != "${host}" ; then
-	BUILD_CC=${CC_FOR_BUILD-gcc}
+	AC_CHECK_PROGS(BUILD_CC, [${build_alias}-gcc ${build}-gcc gcc])
 else
-	BUILD_CC="\$(CC)"
+	BUILD_CC="$CC"
 fi
 
+dnl Find compiler for target
+if test "${target}" != "${host}" ; then
+	AC_CHECK_PROGS(TARGET_CC, [${target_alias}-gcc ${target}-gcc gcc])
+else
+	TARGET_CC="$CC"
+fi
 
 dnl Find the compiler tool chain
 AC_PROG_CPP
@@ -109,13 +110,16 @@ AC_CHECK_PROG([DIRNAME],  dirname,  dirname,  "no", [$PATH])
 
 dnl See if I have a usable copy of zlib available
 if test "$with_zlib" = yes ; then
-	AC_CHECK_HEADER(zlib.h, AC_CHECK_LIB(z, inflateInit_, [AC_DEFINE(HAVE_ZLIB_H, 1) LIBS="$LIBS -lz"]))
+	AC_CHECK_HEADER(zlib.h,
+		AC_CHECK_LIB(z, inflateInit_, ,
+		AC_MSG_NOTICE([zlib support disabled])))
 fi
 
 dnl find Xen control stack libraries
 if test "$with_xen" = yes ; then
-	AC_CHECK_HEADER(xenctrl.h, AC_CHECK_LIB(xenctrl, xc_version,
-		[AC_DEFINE(HAVE_XENCTRL_H, 1) LIBS="$LIBS -lxenctrl"]))
+	AC_CHECK_HEADER(xenctrl.h,
+		AC_CHECK_LIB(xenctrl, xc_version, ,
+		AC_MSG_NOTICE([Xen support disabled])))
 fi
 
 dnl ---Sanity checks
@@ -138,14 +142,15 @@ if test "$XARGS"   = "no"; then AC_MSG_ERROR([ xargs not found]) fi
 if test "$DIRNAME" = "no"; then AC_MSG_ERROR([ dirname not found]) fi 
 
 dnl ---Output variables...
-
 AC_SUBST([BUILD_CC])
 AC_SUBST([BUILD_CFLAGS])
+AC_SUBST([TARGET_CC])
+AC_SUBST([TARGET_CFLAGS])
+AC_SUBST([ASFLAGS])
 
-AC_SUBST([EXTRA_CFLAGS])
 AC_SUBST([ARCH])
 AC_SUBST([OBJDIR])
 AC_SUBST([INSTALL])
 
 dnl ---Output
-AC_OUTPUT([Makefile.conf])
+AC_OUTPUT([Makefile])

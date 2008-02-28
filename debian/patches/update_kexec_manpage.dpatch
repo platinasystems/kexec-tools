@@ -1,0 +1,21 @@
+#!/bin/sh /usr/share/dpatch/dpatch-run
+## update_kexec_manpage.dpatch by  <khalid@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: This patch updates kexec man page
+
+@DPATCH@
+diff -urN --exclude=debian kexec-tools-testing-20080227/kexec/kexec.8 kexec-tools-20080227.debian/kexec/kexec.8
+--- kexec-tools-testing-20080227/kexec/kexec.8	2008-02-28 14:23:18.000000000 -0700
++++ kexec-tools-20080227.debian/kexec/kexec.8	2008-02-28 14:23:48.000000000 -0700
+@@ -55,10 +55,6 @@ where
+ .I kernel\-image
+ is the kernel file that you intend to reboot to.
+ .PP
+-Note: Compressed kernel images such as bzImage are not supported by
+-.BR kexec .
+-Use the uncompressed vmlinux.
+-.PP
+ Insert the command-line parameters that must be passed to the new
+ kernel into
+ .IR command\-line\-options .

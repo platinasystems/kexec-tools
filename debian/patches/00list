@@ -1,3 +1,4 @@
 debianize.dpatch
 crashdump_warning.dpatch
 static_binary_warning.dpatch
+update_kexec_manpage.dpatch

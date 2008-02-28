@@ -1,0 +1,8 @@
+Template: kexec-tools/load_kexec
+Type: select
+_Choices: 1, 0
+Default: 1
+_Description: Enable automatic kexec reboots?
+  You can enable kexec-tools to load a new kexec'able kernel 
+  automatically upon reboot and kexec into the new kernel instead 
+  of normal reboot. (1=enable, 0=disable)

@@ -1,3 +1,22 @@
+kexec-tools (20080227-1) unstable; urgency=low
+
+  * New upstream version
+  * Updated init scripts to remove bash'ism (closes: Bug#465000, Bug#462554)
+  * Updated init scripts to add reverse dependency on umountroot 
+    (closes: Bug#458983)
+  * Added autofs to Required-Stop for kexec-load init script to ensure 
+    a kexec load of a kernel on an automounted filesystem is successful 
+    (closes: Bug#440979)
+  * Changed the kexec-load init script execution order to run before autofs
+    (closes: Bug#440979)
+  * Added debconf options to ask user whether to enable kexec by default 
+    or not
+  * Updated package description in control file
+  * Updated kexec man page to remove the note about lack of support for 
+    compressed kernels (closes: Bug#464813)
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 28 Feb 2008 14:19:40 -0700
+
 kexec-tools (20070330-4) unstable; urgency=low
 
   * Added another condition around strip command to address build failure on

@@ -2,7 +2,7 @@
 ## crashdump_warning.dpatch by  <mckinstry@debian.org>
 ##
 ## All lines beginning with `## DP:' are a description of the patch.
-## DP: No description.
+## DP: Adds warnings if crashdump kernel fails to load
 
 @DPATCH@
 diff -urNp --exclude=debian kexec-tools-0.20070319.rc/kexec/arch/x86_64/crashdump-x86_64.c kexec-tools-testing-20070319-rc/kexec/arch/x86_64/crashdump-x86_64.c
