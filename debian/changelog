@@ -1,3 +1,10 @@
+kexec-tools (20080227-2) unstable; urgency=low
+
+  * Fixed a bad dependency in kexec-load init script 
+  * Changed the priority of debconf question to medium.
+
+ -- Khalid Aziz <khalid@debian.org>  Mon, 03 Mar 2008 09:08:09 -0700
+
 kexec-tools (20080227-1) unstable; urgency=low
 
   * New upstream version

@@ -2,7 +2,8 @@
 ### BEGIN INIT INFO
 # Provides:		kexec-load
 # Required-Start:
-# Required-Stop:	$remote_fs autofs kexec
+# Required-Stop:	$remote_fs kexec
+# Should-Stop:		autofs
 # Default-Start:
 # Default-Stop:		6
 # Short-Description: Load kernel image with kexec
