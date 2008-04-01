@@ -6,7 +6,7 @@ Build-Depends: debhelper (>= 4.0.0), dpatch, gnu-efi (>=3.0a-4)[ia64], libz-dev[
 Standards-Version: 3.7.3
 
 Package: kexec-tools
-Architecture: i386 amd64 ppc64 ia64 s390
+Architecture: i386 amd64 ppc64 powerpc ia64 s390
 Depends: ${shlibs:Depends}, ${misc:Depends}, debconf
 Description: kexec tool for kexec reboots
  This tool is used to load a kernel in memory and reboot into the kernel

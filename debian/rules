@@ -39,7 +39,9 @@ build-stamp: configure-stamp
 
 	touch build-stamp
 
-clean: configure-stamp unpatch
+clean: tidy unpatch
+
+tidy: patch configure-stamp 
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp configure-stamp 

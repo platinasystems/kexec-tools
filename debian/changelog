@@ -1,3 +1,21 @@
+kexec-tools (20080324-1) unstable; urgency=low
+
+  * New upstream version
+  * Fixed a typo in x86-64 makefile that causes kexec load to fail on
+    amd64 (closes: Bug#473547)
+  * Added a patch from upstream to enable compilation on powerpc (closes:
+    Bug#477260)
+  * Added portugese translation for debconf (closes: Bug#469960,Bug#478358)
+  * Added german translation for debconf (closes: Bug#470499)
+  * Added galician translation (closes: Bug#477940)
+  * Added russian translation (closes: Bug#477983)
+  * Added finnish translation (closes: Bug#477984)
+  * Added vietnamese translation (closes: Bug#478221)
+  * Changed debconf variable type to boolean (closes: Bug#469256)
+  * Added debian/watch file (closes: Bug#474752)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 01 Apr 2008 09:53:50 -0600
+
 kexec-tools (20080227-2) unstable; urgency=low
 
   * Fixed a bad dependency in kexec-load init script 

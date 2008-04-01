@@ -1,5 +1,5 @@
-#! /bin/sh
-# preinst script for kexec-tools
+#! /bin/sh 
+# postinst script for kexec-tools
 #
 # see: dh_installdeb(1)
 
@@ -69,7 +69,7 @@ umask 022
 # sourced by /etc/init.d/kexec and /etc/init.d/kexec-load
 
 # Load a kexec kernel by default
-LOAD_KEXEC=1
+LOAD_KEXEC=true
 
 # Kernel and initrd image
 KERNEL_IMAGE="/vmlinuz"
@@ -83,7 +83,7 @@ EOFMAGICNUMBER1234
 . ${INITCONFFILE}
 # ------------------------- Debconf questions start ---------------------
 
-db_get kexec-tools/load_kexec || RET=1
+db_get kexec-tools/load_kexec || RET=true
 new_LOAD_KEXEC="${RET}"
 update_param LOAD_KEXEC
 db_stop
