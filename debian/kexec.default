@@ -1,8 +1,8 @@
 # Defaults for kexec initscript
 # sourced by /etc/init.d/kexec and /etc/init.d/kexec-load
 
-# Load a kexec kernel by default
-LOAD_KEXEC=1
+# Load a kexec kernel (true/false)
+LOAD_KEXEC=true
 
 # Kernel and initrd image
 KERNEL_IMAGE="/vmlinuz"

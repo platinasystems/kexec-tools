@@ -1,3 +1,12 @@
+kexec-tools (20080324-2) unstable; urgency=low
+
+  * Updated init script to check for new boolean value of LOAD_KEXEC (closes:
+    Bug#479961)
+  * Added french translation for debconf (closes: Bug#470921,Bug#479688)
+  * Added czech translation for debconf (closes: Bug#480301)
+
+ -- Khalid Aziz <khalid@debian.org>  Fri, 09 May 2008 12:03:29 -0600
+
 kexec-tools (20080324-1) unstable; urgency=low
 
   * New upstream version
