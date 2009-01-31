@@ -4,3 +4,4 @@ static_binary_warning.dpatch
 update_kexec_manpage.dpatch
 distclean_fix.dpatch
 powerpc_fix.dpatch
+arm_build.dpatch

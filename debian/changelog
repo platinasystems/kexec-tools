@@ -1,3 +1,12 @@
+kexec-tools (20080324-2.1) unstable; urgency=low
+
+  * Porter NMU.
+  * New dpatch, arm_build, fixes build on armel; thanks Cyril Hrubis;
+    closes: #489175.
+  * List arm and armel in control.
+
+ -- Loic Minier <lool@dooz.org>  Sat, 31 Jan 2009 18:31:42 +0000
+
 kexec-tools (20080324-2) unstable; urgency=low
 
   * Updated init script to check for new boolean value of LOAD_KEXEC (closes:
