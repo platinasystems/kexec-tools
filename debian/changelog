@@ -1,3 +1,13 @@
+kexec-tools (1:2.0.0-1) unstable; urgency=low
+
+  * New upstream version 
+  * Added note about call to shutdown by kexec -e. Also added a README.debian
+    to explain automatic enablement of kexec (closes: Bug#501847)
+  * Added japanese translation (closes: Bug#512870)
+  * Added swedish translation (closes: Bug#503604)
+
+ -- Khalid Aziz <khalid@debian.org>  Wed, 15 Apr 2009 16:41:45 -0600
+
 kexec-tools (20080324-2.1) unstable; urgency=low
 
   * Porter NMU.

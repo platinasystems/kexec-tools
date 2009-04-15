@@ -55,10 +55,6 @@ where
 .I kernel\-image
 is the kernel file that you intend to reboot to.
 .PP
-Note: Compressed kernel images such as bzImage are not supported by
-.BR kexec .
-Use the uncompressed vmlinux.
-.PP
 Insert the command-line parameters that must be passed to the new
 kernel into
 .IR command\-line\-options .
@@ -71,6 +67,17 @@ The optional
 .I initrd-image
 is the initrd image to be used during boot.
 .PP
+It's also possible to invoke
+.B kexec
+without an option parameter. In that case, kexec loads the specified
+kernel and then invokes
+.BR shutdown (1).
+If the shutdown scripts of your Linux distribution support
+kexec-based rebooting, they then call
+.B kexec
+.I -e
+just before actually rebooting the machine. That way, the machine does
+a clean shutdown including all shutdown scripts.
 
 .SH EXAMPLE
 .PP
@@ -103,7 +110,14 @@ Run the currently loaded kernel.
 .B \-f\ (\-\-force)
 Force an immediate
 .B kexec
-call, do not call shutdown.
+call, do not call
+.BR shutdown (1)
+(contrary to the default action without any option parameter). This option
+performs the same actions like executing
+.IR -l
+and
+.IR -e
+in one call.
 .TP
 .B \-h\ (\-\-help)
 Open a help file for
@@ -172,6 +186,15 @@ to the kernel command line.
 Set the kernel command line to
 .IR string .
 .TP
+.BI \-\-reuse-cmdline
+Use the command line from the running system. When a panic kernel is loaded, it
+strips the
+.I
+crashkernel
+parameter automatically. The
+.I BOOT_IMAGE
+parameter is also stripped.
+.TP
 .BI \-\-initrd= file
 Use
 .I file
@@ -183,12 +206,56 @@ Use
 as the kernel's initial ramdisk.
 .RE
 .PP
+.B bzImage-x86
+.RS
+.TP
+.BI \-\-append= string
+Append
+.I string
+to the kernel command line.
+.TP
+.BI \-\-command\-line= string
+Set the kernel command line to
+.IR string .
+.TP
+.BI \-\-reuse-cmdline
+Use the command line from the running system. When a panic kernel is loaded, it
+strips the
+.I
+crashkernel
+parameter automatically. The
+.I BOOT_IMAGE
+parameter is also stripped.
+.TP
+.BI \-\-initrd= file
+Use
+.I file
+as the kernel's initial ramdisk.
+.TP
+.BI \-\-ramdisk= file
+Use
+.I file
+as the kernel's initial ramdisk.
+.TP
+.BI \-\-real-mode
+Use real-mode entry point.
+.RE
+.PP
 .B multiboot-x86
 .RS
 .TP
 .BI \-\-command\-line= string
 Set the kernel command line to
 .IR string .
+.TP
+.BI \-\-reuse-cmdline
+Use the command line from the running system. When a panic kernel is loaded, it
+strips the
+.I
+crashkernel
+parameter automatically. The
+.I BOOT_IMAGE
+parameter is also stripped.
 .TP
 .BI \-\-module= "mod arg1 arg2 ..."
 Load module

@@ -27,7 +27,6 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -77,7 +76,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 			struct kexec_info *info)
 {
 	struct mem_ehdr ehdr;
-	char *cmdline, *modified_cmdline;
+	char *cmdline, *modified_cmdline = NULL;
 	const char *devicetreeblob;
 	int cmdline_len, modified_cmdline_len;
 	uint64_t max_addr, hole_addr;
@@ -187,7 +186,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	if (size > phdr->p_memsz)
 		size = phdr->p_memsz;
 
-	hole_addr = (unsigned long)locate_hole(info, size, 0, 0,
+	hole_addr = (uint64_t)locate_hole(info, size, 0, 0,
 			max_addr, 1);
 	ehdr.e_phdr[0].p_paddr = hole_addr;
 	result = elf_exec_load(&ehdr, info);

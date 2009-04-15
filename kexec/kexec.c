@@ -30,7 +30,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifndef _O_BINARY
+#define _O_BINARY 0
+#endif
 #include <getopt.h>
+#include <ctype.h>
 
 #include "config.h"
 
@@ -46,6 +50,7 @@
 
 unsigned long long mem_min = 0;
 unsigned long long mem_max = ULONG_MAX;
+unsigned long kexec_flags = 0;
 
 void die(char *fmt, ...)
 {
@@ -285,11 +290,6 @@ unsigned long locate_hole(struct kexec_info *info,
 	return hole_base;
 }
 
-unsigned long __attribute__((weak)) virt_to_phys(unsigned long addr)
-{
-	abort();
-}
-
 void add_segment_phys_virt(struct kexec_info *info,
 	const void *buf, size_t bufsz,
 	unsigned long base, size_t memsz, int phys)
@@ -342,13 +342,6 @@ void add_segment_phys_virt(struct kexec_info *info,
 	}
 }
 
-void __attribute__((weak)) add_segment(struct kexec_info *info,
-				       const void *buf, size_t bufsz,
-				       unsigned long base, size_t memsz)
-{
-	return add_segment_phys_virt(info, buf, bufsz, base, memsz, 0);
-}
-
 unsigned long add_buffer_phys_virt(struct kexec_info *info,
 	const void *buf, unsigned long bufsz, unsigned long memsz,
 	unsigned long buf_align, unsigned long buf_min, unsigned long buf_max,
@@ -385,19 +378,6 @@ unsigned long add_buffer_virt(struct kexec_info *info, const void *buf,
 				    buf_min, buf_max, buf_end, 0);
 }
 
-unsigned long __attribute__((weak)) add_buffer(struct kexec_info *info,
-					       const void *buf,
-					       unsigned long bufsz,
-					       unsigned long memsz,
-					       unsigned long buf_align,
-					       unsigned long buf_min,
-					       unsigned long buf_max,
-					       int buf_end)
-{
-	return add_buffer_virt(info, buf, bufsz, memsz, buf_align,
-			       buf_min, buf_max, buf_end);
-}
-
 char *slurp_file(const char *filename, off_t *r_size)
 {
 	int fd;
@@ -411,7 +391,7 @@ char *slurp_file(const char *filename, off_t *r_size)
 		*r_size = 0;
 		return 0;
 	}
-	fd = open(filename, O_RDONLY);
+	fd = open(filename, O_RDONLY | _O_BINARY);
 	if (fd < 0) {
 		die("Cannot open `%s': %s\n",
 			filename, strerror(errno));
@@ -433,6 +413,8 @@ char *slurp_file(const char *filename, off_t *r_size)
 			die("read on %s of %ld bytes failed: %s\n", filename,
 			    (size - progress)+ 0UL, strerror(errno));
 		}
+		if (result == 0)
+			die("read on %s ended before stat said it should\n", filename);
 		progress += result;
 	}
 	result = close(fd);
@@ -454,7 +436,7 @@ char *slurp_file_len(const char *filename, off_t size)
 
 	if (!filename)
 		return 0;
-	fd = open(filename, O_RDONLY);
+	fd = open(filename, O_RDONLY | _O_BINARY);
 	if (fd < 0) {
 		fprintf(stderr, "Cannot open %s: %s\n", filename,
 				strerror(errno));
@@ -584,7 +566,7 @@ static void update_purgatory(struct kexec_info *info)
 			sha256_update(&ctx, null_buf, bytes);
 			nullsz -= bytes;
 		}
-		region[j].start = info->segment[i].mem;
+		region[j].start = (unsigned long) info->segment[i].mem;
 		region[j].len   = info->segment[i].memsz;
 		j++;
 	}
@@ -607,6 +589,7 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	int i = 0;
 	int result;
 	struct kexec_info info;
+	long native_arch;
 	int guess_only = 0;
 
 	memset(&info, 0, sizeof(info));
@@ -674,6 +657,11 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 		return -1;
 	}
 	/* If we are not in native mode setup an appropriate trampoline */
+	native_arch = physical_arch();
+	if (native_arch < 0) {
+		return -1;
+	}
+	info.kexec_flags |= native_arch;
 	if (arch_compat_trampoline(&info) < 0) {
 		return -1;
 	}
@@ -714,6 +702,14 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 int k_unload (unsigned long kexec_flags)
 {
 	int result;
+	long native_arch;
+
+	/* set the arch */
+	native_arch = physical_arch();
+	if (native_arch < 0) {
+		return -1;
+	}
+	kexec_flags |= native_arch;
 
 	result = kexec_load(NULL, 0, NULL, kexec_flags);
 	if (result != 0) {
@@ -729,13 +725,12 @@ int k_unload (unsigned long kexec_flags)
  */
 static int my_shutdown(void)
 {
-	char *args[8];
-	int i = 0;
-
-	args[i++] = "shutdown";
-	args[i++] = "-r";
-	args[i++] = "now";
-	args[i++] = NULL;
+	char *args[] = {
+		"shutdown",
+		"-r",
+		"now",
+		NULL
+	};
 
 	execv("/sbin/shutdown", args);
 	execv("/etc/shutdown", args);
@@ -816,31 +811,85 @@ static int kexec_loaded(void)
 	return ret;
 }
 
+/*
+ * Remove parameter from a kernel command line. Helper function by get_command_line().
+ */
+static void remove_parameter(char *line, const char *param_name)
+{
+	char *start, *end;
+
+	start = strstr(line, param_name);
+
+	/* parameter not found */
+	if (!start)
+		return;
+
+	/*
+	 * check if that's really the start of a parameter and not in
+	 * the middle of the word
+	 */
+	if (start != line && !isspace(*(start-1)))
+		return;
+
+	end = strstr(start, " ");
+	if (!end)
+		*start = 0;
+	else {
+		memmove(start, end+1, strlen(end));
+		*(end + strlen(end)) = 0;
+	}
+}
+
+/*
+ * Returns the contents of the current command line to be used with
+ * --reuse-cmdline option.  The function gets called from architecture specific
+ * code. If we load a panic kernel, that function will strip the
+ * "crashkernel=" option because it does not make sense that the crashkernel
+ * reserves memory for a crashkernel (well, it would not boot since the
+ * amount is exactly the same as the crashkernel has overall memory). Also,
+ * remove the BOOT_IMAGE from lilo (and others) since that doesn't make
+ * sense here any more. The kernel could be different even if we reuse the
+ * commandline.
+ *
+ * The function returns dynamically allocated memory.
+ */
+char *get_command_line(void)
+{
+	FILE *fp;
+	size_t len;
+	char *line = NULL;
+
+	fp = fopen("/proc/cmdline", "r");
+	if (!fp)
+		die("Could not read /proc/cmdline.");
+	getline(&line, &len, fp);
+	fclose(fp);
+
+	if (line) {
+		/* strip newline */
+		*(line + strlen(line) - 1) = 0;
+
+		remove_parameter(line, "BOOT_IMAGE");
+		if (kexec_flags & KEXEC_ON_CRASH)
+			remove_parameter(line, "crashkernel");
+	} else
+		line = strdup("");
+
+	return line;
+}
+
 /* check we retained the initrd */
 void check_reuse_initrd(void)
 {
-	FILE * fp;
-	char * line = NULL;
-	size_t len = 0;
-	ssize_t read;
+	char *line = get_command_line();
 
-	fp = fopen("/proc/cmdline", "r");
-	if (fp == NULL)
-		die("unable to open /proc/cmdline\n");
-	read = getline(&line, &len, fp);
 	if (strstr(line, "retain_initrd") == NULL)
 		die("unrecoverable error: current boot didn't "
 		    "retain the initrd for reuse.\n");
-	if (line)
-		free(line);
-	fclose(fp);
+
+	free(line);
 }
 
-/* Arch hook for reuse_initrd */
-void __attribute__((weak)) arch_reuse_initrd(void)
-{
-	die("--reuseinitrd not implemented on this architecture\n");
-}
 
 int main(int argc, char *argv[])
 {
@@ -851,7 +900,6 @@ int main(int argc, char *argv[])
 	int do_ifdown = 0;
 	int do_unload = 0;
 	int do_reuse_initrd = 0;
-	unsigned long kexec_flags = 0;
 	char *type = 0;
 	char *endptr;
 	int opt;
@@ -986,8 +1034,7 @@ int main(int argc, char *argv[])
 		sync();
 	}
 	if ((result == 0) && do_ifdown) {
-		extern int ifdown(void);
-		(void)ifdown();
+		ifdown();
 	}
 	if ((result == 0) && do_exec) {
 		result = my_exec();
