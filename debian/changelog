@@ -1,3 +1,10 @@
+kexec-tools (1:2.0.0-2) unstable; urgency=low
+
+  * Fixed configure script failure (closes: Bug#543081)
+  * Added debian/README.source
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 10 Sep 2009 09:34:58 -0600
+
 kexec-tools (1:2.0.0-1) unstable; urgency=low
 
   * New upstream version 

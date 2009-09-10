@@ -5,3 +5,4 @@ distclean_fix.dpatch
 arm_build.dpatch
 update_kexec_manpage.dpatch
 add_debian_readme.dpatch
+configure.dpatch
