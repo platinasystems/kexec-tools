@@ -1,7 +1,7 @@
 /*
  * firmware_memmap.c: Read /sys/firmware/memmap
  *
- * Created by: Bernhard Walle (bwalle@suse.de)
+ * Created by: Bernhard Walle (bernhard.walle@gmx.de)
  * Copyright (C) SUSE LINUX Products GmbH, 2008. All rights reserved
  *
  * This program is free software; you can redistribute it and/or modify
@@ -158,6 +158,8 @@ static int parse_memmap_entry(const char *entry, struct memory_range *range)
 		range->type = RANGE_RESERVED;
 	else if (strcmp(type, "ACPI Non-volatile Storage") == 0)
 		range->type = RANGE_ACPI_NVS;
+	else if (strcmp(type, "Uncached RAM") == 0)
+		range->type = RANGE_UNCACHED;
 	else {
 		fprintf(stderr, "Unknown type (%s) while parsing %s. Please "
 			"report this as bug. Using RANGE_RESERVED now.\n",
@@ -237,7 +239,7 @@ int get_firmware_memmap_ranges(struct memory_range *range, size_t *ranges)
 		/* array overflow check */
 		if ((size_t)i >= *ranges) {
 			fprintf(stderr, "The firmware provides more entries "
-				"allowed (%d). Please report that as bug.\n",
+				"allowed (%zd). Please report that as bug.\n",
 				*ranges);
 			goto error;
 		}

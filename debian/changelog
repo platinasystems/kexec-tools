@@ -1,3 +1,11 @@
+kexec-tools (1:2.0.1-1) unstable; urgency=low
+
+  * New upstream version
+  * Honor dpkg-preconfigure, remove /etc/default/kexec from deb package and
+    remove /etc/default/kexec on package purge (closes: Bug#551919)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 24 Nov 2009 08:55:05 -0700
+
 kexec-tools (1:2.0.0-2) unstable; urgency=low
 
   * Fixed configure script failure (closes: Bug#543081)

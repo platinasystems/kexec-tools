@@ -28,6 +28,11 @@
 #ifdef __sh__
 #define __NR_kexec_load		283
 #endif
+#ifdef __cris__
+#ifndef __NR_kexec_load
+#define __NR_kexec_load		283
+#endif
+#endif
 #ifdef __ia64__
 #define __NR_kexec_load		1268
 #endif
@@ -70,8 +75,9 @@ static inline long kexec_reboot(void)
 }
 
 
-#define KEXEC_ON_CRASH  0x00000001
-#define KEXEC_ARCH_MASK 0xffff0000
+#define KEXEC_ON_CRASH		0x00000001
+#define KEXEC_PRESERVE_CONTEXT	0x00000002
+#define KEXEC_ARCH_MASK		0xffff0000
 
 /* These values match the ELF architecture values. 
  * Unless there is a good reason that should continue to be the case.
@@ -87,6 +93,7 @@ static inline long kexec_reboot(void)
 #define KEXEC_ARCH_SH      (42 << 16)
 #define KEXEC_ARCH_MIPS_LE (10 << 16)
 #define KEXEC_ARCH_MIPS    ( 8 << 16)
+#define KEXEC_ARCH_CRIS    (76 << 16)
 
 #define KEXEC_MAX_SEGMENTS 16
 

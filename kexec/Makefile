@@ -48,6 +48,7 @@ include $(srcdir)/kexec/arch/arm/Makefile
 include $(srcdir)/kexec/arch/i386/Makefile
 include $(srcdir)/kexec/arch/ia64/Makefile
 include $(srcdir)/kexec/arch/mips/Makefile
+include $(srcdir)/kexec/arch/cris/Makefile
 include $(srcdir)/kexec/arch/ppc/Makefile
 include $(srcdir)/kexec/arch/ppc64/Makefile
 include $(srcdir)/kexec/arch/s390/Makefile
@@ -67,10 +68,9 @@ KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
 
 -include $(KEXEC_DEPS)
 
-$(KEXEC): LDFLAGS+=$(LIBS)
 $(KEXEC): $(KEXEC_OBJS) $(UTIL_LIB)
 	@$(MKDIR) -p $(@D)
-	$(LINK.o) -o $@ $^
+	$(LINK.o) -o $@ $^ $(LIBS)
 
 $(KEXEC): CPPFLAGS+=-I$(srcdir)/kexec/arch/$(ARCH)/include
 

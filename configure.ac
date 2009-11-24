@@ -4,11 +4,12 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.0)
+AC_INIT(kexec-tools, 2.0.1)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
+AC_LANG(C)
 
-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "19th July 2008",
+AC_DEFINE_UNQUOTED(PACKAGE_DATE, "13th August 2009",
 		[Define to the release date of this package])
 
 
@@ -40,6 +41,9 @@ case $target_cpu in
 		;;
 	mips|mipsel )
 		ARCH="mips"
+		;;
+	cris|crisv32 )
+		ARCH="cris"
 		;;
 	ia64|x86_64|alpha )
 		ARCH="$target_cpu"
@@ -104,6 +108,19 @@ else
 	TARGET_CC="$CC"
 	TARGET_LD="$LD"
 fi
+
+AC_MSG_CHECKING([whether $TARGET_CC accepts -fno-zero-initialized-in-bss])
+saved_CFLAGS="$CFLAGS"
+saved_CC="$CC"
+CC="$TARGET_CC"
+CFLAGS="$CFLAGS -fno-zero-initialized-in-bss"
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,,)],
+		  PURGATORY_EXTRA_CFLAGS="-fno-zero-initialized-in-bss"
+		  AC_MSG_RESULT([Yes]), AC_MSG_RESULT([No]))
+CFLAGS="$saved_CFLAGS"
+CC="$saved_CC"
+
+AC_SUBST(PURGATORY_EXTRA_CFLAGS, [$PURGATORY_EXTRA_CFLAGS])
 
 dnl Find the helper functions
 AC_PROG_INSTALL

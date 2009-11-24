@@ -19,7 +19,13 @@ set -e
 
 
 case "$1" in
-       purge|remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+       purge)
+	if [ -f /etc/default/kexec ]
+	then
+		rm /etc/default/kexec
+	fi
+        ;;
+       remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
 
 
         ;;

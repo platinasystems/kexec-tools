@@ -8,11 +8,10 @@
 diff -urNad kexec-tools-20080324~/kexec/arch/arm/kexec-zImage-arm.c kexec-tools-20080324/kexec/arch/arm/kexec-zImage-arm.c
 --- kexec-tools-20080324~/kexec/arch/arm/kexec-zImage-arm.c	2008-03-21 03:13:12.000000000 +0000
 +++ kexec-tools-20080324/kexec/arch/arm/kexec-zImage-arm.c	2009-01-31 18:30:31.000000000 +0000
-@@ -11,7 +11,7 @@
+@@ -11,7 +11,8 @@
  #include <stdint.h>
  #include <getopt.h>
  #include <arch/options.h>
--#include <asm/page.h>
 +#include <unistd.h>
  #include "../../kexec.h"
  

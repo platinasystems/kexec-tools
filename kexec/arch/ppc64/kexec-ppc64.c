@@ -96,39 +96,109 @@ err1:
 
 }
 
-/*
- * Count the memory nodes under /proc/device-tree and populate the
- * max_memory_ranges variable. This variable replaces MAX_MEMORY_RANGES
- * macro used earlier.
- */
-static int count_memory_ranges(void)
+static int realloc_memory_ranges(void)
 {
-	char device_tree[256] = "/proc/device-tree/";
-	struct dirent *dentry;
-	DIR *dir;
+	size_t memory_range_len;
 
-	if ((dir = opendir(device_tree)) == NULL) {
-		perror(device_tree);
-		return -1;
-	}
+	max_memory_ranges++;
+	memory_range_len = sizeof(struct memory_range) * max_memory_ranges;
 
-	while ((dentry = readdir(dir)) != NULL) {
-		if (strncmp(dentry->d_name, "memory@", 7) &&
-			strcmp(dentry->d_name, "memory") &&
-			strncmp(dentry->d_name, "pci@", 4))
-			continue;
-		max_memory_ranges++;
-	}
-	/* need to add extra region for retained initrd */
-	if (reuse_initrd) {
-		max_memory_ranges++;
-	}
+	memory_range = (struct memory_range *) realloc(memory_range, memory_range_len);
+	if (!memory_range)
+		goto err;
 
-	closedir(dir);
+	base_memory_range = (struct memory_range *) realloc(base_memory_range, memory_range_len);
+	if (!base_memory_range)
+		goto err;
+
+	exclude_range = (struct memory_range *) realloc(exclude_range, memory_range_len);
+	if (!exclude_range)
+		goto err;
+
+	usablemem_rgns.ranges = (struct memory_range *)
+				realloc(usablemem_rgns.ranges, memory_range_len);
+	if (!(usablemem_rgns.ranges))
+		goto err;
 
 	return 0;
+
+err:
+	fprintf(stderr, "memory range structure re-allocation failure\n");
+	return -1;
 }
 
+
+static void add_base_memory_range(uint64_t start, uint64_t end)
+{
+	base_memory_range[nr_memory_ranges].start = start;
+	base_memory_range[nr_memory_ranges].end  = end;
+	base_memory_range[nr_memory_ranges].type = RANGE_RAM;
+	nr_memory_ranges++;
+	if (nr_memory_ranges >= max_memory_ranges)
+		realloc_memory_ranges();
+
+	dbgprintf("%016llx-%016llx : %x\n",
+		base_memory_range[nr_memory_ranges-1].start,
+		base_memory_range[nr_memory_ranges-1].end,
+		base_memory_range[nr_memory_ranges-1].type);
+}
+
+static int get_dyn_reconf_base_ranges(void)
+{
+	uint64_t start, end;
+	char fname[128], buf[32];
+	FILE *file;
+	int i, n;
+
+	strcpy(fname, "/proc/device-tree/");
+	strcat(fname, "ibm,dynamic-reconfiguration-memory/ibm,lmb-size");
+	if ((file = fopen(fname, "r")) == NULL) {
+		perror(fname);
+		return -1;
+	}
+	if (fread(buf, 1, 8, file) != 8) {
+		perror(fname);
+		fclose(file);
+		return -1;
+	}
+	/*
+	 * lmb_size, num_of_lmbs(global variables) are
+	 * initialized once here.
+	 */
+	lmb_size = ((uint64_t *)buf)[0];
+	fclose(file);
+
+	strcpy(fname, "/proc/device-tree/");
+	strcat(fname,
+		"ibm,dynamic-reconfiguration-memory/ibm,dynamic-memory");
+	if ((file = fopen(fname, "r")) == NULL) {
+		perror(fname);
+		return -1;
+	}
+	/* first 4 bytes tell the number of lmbs */
+	if (fread(buf, 1, 4, file) != 4) {
+		perror(fname);
+		fclose(file);
+		return -1;
+	}
+	num_of_lmbs = ((unsigned int *)buf)[0];
+
+	for (i = 0; i < num_of_lmbs; i++) {
+		if ((n = fread(buf, 1, 24, file)) < 0) {
+			perror(fname);
+			fclose(file);
+			return -1;
+		}
+		if (nr_memory_ranges >= max_memory_ranges)
+			return -1;
+
+		start = ((uint64_t *)buf)[0];
+		end = start + lmb_size;
+		add_base_memory_range(start, end);
+	}
+	fclose(file);
+	return 0;
+}
 /* Sort the base ranges in memory - this is useful for ensuring that our
  * ranges are in ascending order, even if device-tree read of memory nodes
  * is done differently. Also, could be used for other range coalescing later
@@ -156,7 +226,7 @@ static int sort_base_ranges(void)
 /* Get base memory ranges */
 static int get_base_ranges(void)
 {
-	int local_memory_ranges = 0;
+	uint64_t start, end;
 	char device_tree[256] = "/proc/device-tree/";
 	char fname[256];
 	char buf[MAXBYTES];
@@ -170,6 +240,11 @@ static int get_base_ranges(void)
 		return -1;
 	}
 	while ((dentry = readdir(dir)) != NULL) {
+		if (!strncmp(dentry->d_name,
+				"ibm,dynamic-reconfiguration-memory", 35)) {
+			get_dyn_reconf_base_ranges();
+			continue;
+		}
 		if (strncmp(dentry->d_name, "memory@", 7) &&
 			strcmp(dentry->d_name, "memory"))
 			continue;
@@ -197,32 +272,22 @@ static int get_base_ranges(void)
 				closedir(dir);
 				return -1;
 			}
-			if (local_memory_ranges >= max_memory_ranges) {
-				fclose(file);
-				break;
+			if (nr_memory_ranges >= max_memory_ranges) {
+				if (realloc_memory_ranges() < 0)
+					break;
 			}
-			base_memory_range[local_memory_ranges].start =
-				((uint64_t *)buf)[0];
-			base_memory_range[local_memory_ranges].end  =
-				base_memory_range[local_memory_ranges].start +
-				((uint64_t *)buf)[1];
-			base_memory_range[local_memory_ranges].type = RANGE_RAM;
-			local_memory_ranges++;
-			dbgprintf("%016llx-%016llx : %x\n",
-				base_memory_range[local_memory_ranges-1].start,
-				base_memory_range[local_memory_ranges-1].end,
-				base_memory_range[local_memory_ranges-1].type);
+			start = ((uint64_t *)buf)[0];
+			end = start + ((uint64_t *)buf)[1];
+			add_base_memory_range(start, end);
 			fclose(file);
 		}
 		closedir(dmem);
 	}
 	closedir(dir);
-	nr_memory_ranges = local_memory_ranges;
 	sort_base_ranges();
 	memory_max = base_memory_range[nr_memory_ranges - 1].end;
-#ifdef DEBUG
-	fprintf(stderr, "get base memory ranges:%d\n", nr_memory_ranges);
-#endif
+	dbgprintf("get base memory ranges:%d\n", nr_memory_ranges);
+
 	return 0;
 }
 
@@ -276,7 +341,9 @@ static int get_devtree_details(unsigned long kexec_flags)
 			strncmp(dentry->d_name, "memory@", 7) &&
 			strcmp(dentry->d_name, "memory") &&
 			strncmp(dentry->d_name, "pci@", 4) &&
-			strncmp(dentry->d_name, "rtas", 4))
+			strncmp(dentry->d_name, "rtas", 4) &&
+			strncmp(dentry->d_name,
+				"ibm,dynamic-reconfiguration-memory", 35))
 			continue;
 		strcpy(fname, device_tree);
 		strcat(fname, dentry->d_name);
@@ -301,6 +368,8 @@ static int get_devtree_details(unsigned long kexec_flags)
 			exclude_range[i].start = 0x0UL;
 			exclude_range[i].end = kernel_end;
 			i++;
+			if (i >= max_memory_ranges)
+				realloc_memory_ranges();
 
 			if (kexec_flags & KEXEC_ON_CRASH) {
 				memset(fname, 0, sizeof(fname));
@@ -336,7 +405,7 @@ static int get_devtree_details(unsigned long kexec_flags)
 					mem_min = crash_base;
 				if (crash_base + crash_size < mem_max)
 					mem_max = crash_base + crash_size;
-
+				
 				add_usable_mem_rgns(0, crash_base + crash_size);
 				reserve(KDUMP_BACKUP_LIMIT, crash_base-KDUMP_BACKUP_LIMIT);
 			}
@@ -375,6 +444,8 @@ static int get_devtree_details(unsigned long kexec_flags)
 			exclude_range[i].start = htab_base;
 			exclude_range[i].end = htab_base + htab_size;
 			i++;
+			if (i >= max_memory_ranges)
+				realloc_memory_ranges();
 
 			/* reserve the initrd_start and end locations. */
 			if (reuse_initrd) {
@@ -420,6 +491,8 @@ static int get_devtree_details(unsigned long kexec_flags)
 				exclude_range[i].start = initrd_start;
 				exclude_range[i].end = initrd_end;
 				i++;
+				if (i >= max_memory_ranges)
+					realloc_memory_ranges();
 			}
 		} /* chosen */
 
@@ -450,6 +523,8 @@ static int get_devtree_details(unsigned long kexec_flags)
 			exclude_range[i].start = rtas_base;
 			exclude_range[i].end = rtas_base + rtas_size;
 			i++;
+			if (i >= max_memory_ranges)
+				realloc_memory_ranges();
 			if (kexec_flags & KEXEC_ON_CRASH)
 				add_usable_mem_rgns(rtas_base, rtas_size);
 		} /* rtas */
@@ -473,6 +548,29 @@ static int get_devtree_details(unsigned long kexec_flags)
 			fclose(file);
 			closedir(cdir);
 		} /* memory */
+
+		if (!strncmp(dentry->d_name,
+				"ibm,dynamic-reconfiguration-memory", 35)) {
+			unsigned int k;
+			strcat(fname, "/ibm,dynamic-memory");
+			if ((file = fopen(fname, "r")) == NULL) {
+				perror(fname);
+				goto error_opencdir;
+			}
+			fseek(file, 4, SEEK_SET);
+			for (k = 0; k < num_of_lmbs; k++) {
+				if ((n = fread(buf, 1, 24, file)) < 0) {
+					perror(fname);
+					goto error_openfile;
+				}
+				rmo_base = ((uint64_t *)buf)[0];
+				rmo_top = rmo_base + lmb_size;
+				if (rmo_top > 0x30000000UL)
+					rmo_top = 0x30000000UL;
+			}
+			fclose(file);
+			closedir(cdir);
+		} /* ibm,dynamic-reconfiguration-memory */
 
 		if (strncmp(dentry->d_name, "pci@", 4) == 0) {
 			strcat(fname, "/linux,tce-base");
@@ -507,6 +605,8 @@ static int get_devtree_details(unsigned long kexec_flags)
 			exclude_range[i].start = tce_base;
 			exclude_range[i].end = tce_base + tce_size;
 			i++;
+			if (i >= max_memory_ranges)
+				realloc_memory_ranges();
 			if (kexec_flags & KEXEC_ON_CRASH)
 				add_usable_mem_rgns(tce_base, tce_size);
 			closedir(cdir);
@@ -560,6 +660,8 @@ int setup_memory_ranges(unsigned long kexec_flags)
 				memory_range[j].end = exclude_range[i].start - 1;
 				memory_range[j].type = RANGE_RAM;
 				j++;
+				if (j >= max_memory_ranges)
+					realloc_memory_ranges();
 			}
 		} /* i == 0 */
 		/* If the last exclude range does not end at memory_max, include
@@ -572,6 +674,8 @@ int setup_memory_ranges(unsigned long kexec_flags)
 				memory_range[j].end = memory_max;
 				memory_range[j].type = RANGE_RAM;
 				j++;
+				if (j >= max_memory_ranges)
+					realloc_memory_ranges();
 				/* Limit the end to rmo_top */
 				if (memory_range[j-1].start >= rmo_top) {
 					j--;
@@ -592,6 +696,8 @@ int setup_memory_ranges(unsigned long kexec_flags)
 		memory_range[j].end = exclude_range[i+1].start - 1;
 		memory_range[j].type = RANGE_RAM;
 		j++;
+		if (j >= max_memory_ranges)
+			realloc_memory_ranges();
 		/* Limit range to rmo_top */
 		if (memory_range[j-1].start >= rmo_top) {
 			j--;
@@ -623,16 +729,26 @@ out:
 int get_memory_ranges(struct memory_range **range, int *ranges,
 			unsigned long kexec_flags)
 {
-	if (count_memory_ranges())
-		return -1;
+        /* allocate memory_range dynamically */
+        max_memory_ranges = 1;
+
 	if (alloc_memory_ranges())
 		return -1;
 	if (setup_memory_ranges(kexec_flags))
 		return -1;
 
-	*range = memory_range;
+	/*
+	 * copy the memory here, another realloc_memory_ranges might
+	 * corrupt the old memory
+	 */
+	*range = calloc(sizeof(struct memory_range), nr_memory_ranges);
+	if (*range == NULL)
+		return -1;
+	memmove(*range, memory_range,
+		sizeof(struct memory_range) * nr_memory_ranges);
+
 	*ranges = nr_memory_ranges;
-	fprintf(stderr, "get memory ranges:%d\n", nr_memory_ranges);
+	dbgprintf("get memory ranges:%d\n", nr_memory_ranges);
 	return 0;
 }
 
