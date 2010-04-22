@@ -1,4 +1,14 @@
-kexec-tools (1:2.0.1-1) unstable; urgency=low
+kexec-tools (1:2.0.1-2) unstable; urgency=low
+
+  * Fixed kernel load failure on "armv5tel" architecture (closes: Bug#564648)
+  * Added a script, codreboot, to force a cold reboot (closes: Bug#519950)
+  * Added dependency dependency upon local filesystem to ensure filesystem
+    containing kexec image is not unmounted before kexec-load runs 
+    (closes: Bug#578126)
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 22 Apr 2010 16:03:31 -0600
+
+kexecc-tools (1:2.0.1-1) unstable; urgency=low
 
   * New upstream version
   * Honor dpkg-preconfigure, remove /etc/default/kexec from deb package and

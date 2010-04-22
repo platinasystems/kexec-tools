@@ -2,7 +2,7 @@
 ### BEGIN INIT INFO
 # Provides:		kexec-load
 # Required-Start:
-# Required-Stop:	$remote_fs kexec
+# Required-Stop:	$local_fs $remote_fs kexec
 # Should-Stop:		autofs
 # Default-Start:
 # Default-Stop:		6
@@ -11,6 +11,7 @@
 ### END INIT INFO
 
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
+NOKEXECFILE=/tmp/no-kexec-reboot
 
 . /lib/lsb/init-functions
 
@@ -20,6 +21,12 @@ do_stop () {
 	test "$LOAD_KEXEC" = "true" || exit 0
 	test -x /sbin/kexec || exit 0
 	test "x`cat /sys/kernel/kexec_loaded`y" = "x1y" && exit 0
+
+	if [ -f $NOKEXECFILE ]
+	then
+		/bin/rm -f $NOKEXECFILE
+		exit 0
+	fi
 
 	REAL_APPEND="$APPEND"
 

@@ -1,0 +1,28 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## arm_arch.dpatch by  <horms@verge.net.au>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Adds support to identify various forms of ARM architecture
+
+@DPATCH@
+diff --git a/kexec/phys_arch.c b/kexec/phys_arch.c
+index ff8c28b..1571a0f 100644
+--- a/kexec/phys_arch.c
++++ b/kexec/phys_arch.c
+@@ -13,9 +13,14 @@ long physical_arch(void)
+ 		return -1;
+ 	}
+ 
+-	for (i = 0; arches[i].machine; ++i)
++	for (i = 0; arches[i].machine; ++i) {
+ 		if (strcmp(utsname.machine, arches[i].machine) == 0)
+ 			return arches[i].arch;
++		if ((strcmp(arches[i].machine, "arm") == 0) &&
++		    (strncmp(utsname.machine, arches[i].machine,
++		     strlen(arches[i].machine)) == 0))
++			return arches[i].arch;
++	}
+ 
+ 	fprintf(stderr, "Unsupported machine type: %s\n",
+ 		utsname.machine);
+
