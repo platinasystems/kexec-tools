@@ -67,6 +67,7 @@ ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
 	[ ! -f $(CURDIR)/debian/kexec-tools/usr/lib/kexec-tools-testing/kexec_test.static ] || strip $(CURDIR)/debian/kexec-tools/usr/lib/kexec-tools-testing/kexec_test.static
 endif
 
+	install -D -m 0755 debian/kexec-tools/sbin/kexec debian/kexec-tools-udeb/sbin/kexec
 
 # Build architecture-independent files here.
 binary-indep: build install
