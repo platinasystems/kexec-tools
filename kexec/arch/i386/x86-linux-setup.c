@@ -49,7 +49,7 @@ void setup_linux_bootloader_parameters(
 	struct kexec_info *info, struct x86_linux_param_header *real_mode,
 	unsigned long real_mode_base, unsigned long cmdline_offset,
 	const char *cmdline, off_t cmdline_len,
-	const unsigned char *initrd_buf, off_t initrd_size)
+	const char *initrd_buf, off_t initrd_size)
 {
 	char *cmdline_ptr;
 	unsigned long initrd_base, initrd_addr_max;
@@ -353,8 +353,7 @@ static void zero_edd(struct x86_linux_param_header *real_mode)
 		EDD_MBR_SIG_MAX * sizeof(uint32_t));
 }
 
-void setup_edd_info(struct x86_linux_param_header *real_mode,
-					unsigned long kexec_flags)
+void setup_edd_info(struct x86_linux_param_header *real_mode)
 {
 	DIR *edd_dir;
 	struct dirent *cursor;
@@ -482,5 +481,5 @@ void setup_linux_system_parameters(struct x86_linux_param_header *real_mode,
 	}
 
 	/* fill the EDD information */
-	setup_edd_info(real_mode, kexec_flags);
+	setup_edd_info(real_mode);
 }

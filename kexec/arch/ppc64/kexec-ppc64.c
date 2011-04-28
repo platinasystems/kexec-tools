@@ -148,7 +148,8 @@ static int get_dyn_reconf_base_ranges(void)
 	uint64_t start, end;
 	char fname[128], buf[32];
 	FILE *file;
-	int i, n;
+	unsigned int i;
+	int n;
 
 	strcpy(fname, "/proc/device-tree/");
 	strcat(fname, "ibm,dynamic-reconfiguration-memory/ibm,lmb-size");
@@ -341,9 +342,7 @@ static int get_devtree_details(unsigned long kexec_flags)
 			strncmp(dentry->d_name, "memory@", 7) &&
 			strcmp(dentry->d_name, "memory") &&
 			strncmp(dentry->d_name, "pci@", 4) &&
-			strncmp(dentry->d_name, "rtas", 4) &&
-			strncmp(dentry->d_name,
-				"ibm,dynamic-reconfiguration-memory", 35))
+			strncmp(dentry->d_name, "rtas", 4)) 
 			continue;
 		strcpy(fname, device_tree);
 		strcat(fname, dentry->d_name);
@@ -549,29 +548,6 @@ static int get_devtree_details(unsigned long kexec_flags)
 			closedir(cdir);
 		} /* memory */
 
-		if (!strncmp(dentry->d_name,
-				"ibm,dynamic-reconfiguration-memory", 35)) {
-			unsigned int k;
-			strcat(fname, "/ibm,dynamic-memory");
-			if ((file = fopen(fname, "r")) == NULL) {
-				perror(fname);
-				goto error_opencdir;
-			}
-			fseek(file, 4, SEEK_SET);
-			for (k = 0; k < num_of_lmbs; k++) {
-				if ((n = fread(buf, 1, 24, file)) < 0) {
-					perror(fname);
-					goto error_openfile;
-				}
-				rmo_base = ((uint64_t *)buf)[0];
-				rmo_top = rmo_base + lmb_size;
-				if (rmo_top > 0x30000000UL)
-					rmo_top = 0x30000000UL;
-			}
-			fclose(file);
-			closedir(cdir);
-		} /* ibm,dynamic-reconfiguration-memory */
-
 		if (strncmp(dentry->d_name, "pci@", 4) == 0) {
 			strcat(fname, "/linux,tce-base");
 			if ((file = fopen(fname, "r")) == NULL) {
@@ -759,11 +735,6 @@ int file_types = sizeof(file_type) / sizeof(file_type[0]);
 
 void arch_usage(void)
 {
-	fprintf(stderr, "     --command-line=<Command line> command line to append.\n");
-	fprintf(stderr, "     --append=<Command line> same as --command-line.\n");
-	fprintf(stderr, "     --ramdisk=<filename> Initial RAM disk.\n");
-	fprintf(stderr, "     --initrd=<filename> same as --ramdisk.\n");
-	fprintf(stderr, "     --devicetreeblob=<filename> Specify device tree blob file.\n");
 	fprintf(stderr, "     --elf64-core-headers Prepare core headers in ELF64 format\n");
 }
 
@@ -773,11 +744,14 @@ struct arch_options_t arch_options = {
 
 int arch_process_options(int argc, char **argv)
 {
+	/* We look for all options so getopt_long doesn't start reordering
+	 * argv[] before file_type[n].load() gets a look in.
+	 */
 	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
+		KEXEC_ALL_OPTIONS
 		{ 0, 0, NULL, 0 },
 	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR;
+	static const char short_options[] = KEXEC_ALL_OPT_STR;
 	int opt;
 
 	opterr = 0; /* Don't complain about unrecognized options here */
@@ -801,14 +775,14 @@ const struct arch_map_entry arches[] = {
 	 * So pass KEXEC_ARCH_PPC64 here
 	 */
 	{ "ppc64", KEXEC_ARCH_PPC64 },
-	{ 0 },
+	{ NULL, 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }
 
-void arch_update_purgatory(struct kexec_info *info)
+void arch_update_purgatory(struct kexec_info *UNUSED(info))
 {
 }

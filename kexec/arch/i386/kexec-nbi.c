@@ -74,7 +74,7 @@ int nbi_probe(const char *buf, off_t len)
 	struct segheader seg;
 	off_t seg_off;
 	/* If we don't have enough data give up */
-	if ((len < sizeof(hdr)) || (len < 512)) {
+	if (((uintmax_t)len < (uintmax_t)sizeof(hdr)) || (len < 512)) {
 		return -1;
 	}
 	memcpy(&hdr, buf, sizeof(hdr));
@@ -150,7 +150,7 @@ void nbi_usage(void)
 		);
 }
 
-int nbi_load(int argc, char **argv, const char *buf, off_t len, 
+int nbi_load(int argc, char **argv, const char *buf, off_t UNUSED(len),
 	struct kexec_info *info)
 {
 	struct imgheader hdr;

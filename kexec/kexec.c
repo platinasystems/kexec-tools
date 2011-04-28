@@ -38,14 +38,13 @@
 
 #include "config.h"
 
-#ifdef HAVE_LIBZ
-#include <zlib.h>
-#endif
 #include <sha256.h>
 #include "kexec.h"
 #include "kexec-syscall.h"
 #include "kexec-elf.h"
 #include "kexec-sha256.h"
+#include "kexec-zlib.h"
+#include "kexec-lzma.h"
 #include <arch/options.h>
 
 unsigned long long mem_min = 0;
@@ -63,6 +62,14 @@ void die(char *fmt, ...)
 	exit(1);
 }
 
+char *xstrdup(const char *str)
+{
+	char *new = strdup(str);
+	if (!new)
+		die("Cannot strdup \"%s\": %s\n",
+			str, strerror(errno));
+	return new;
+}
 
 void *xmalloc(size_t size)
 {
@@ -201,7 +208,7 @@ unsigned long locate_hole(struct kexec_info *info,
 		hole_align = 1;
 	}
 	/* Align everything to at least a page size boundary */
-	if (hole_align < getpagesize()) {
+	if (hole_align < (unsigned long)getpagesize()) {
 		hole_align = getpagesize();
 	}
 
@@ -468,7 +475,7 @@ char *slurp_file(const char *filename, off_t *r_size)
 {
 	int fd;
 	char *buf;
-	off_t size, progress;
+	off_t size, progress, err;
 	ssize_t result;
 	struct stat stats;
 	
@@ -487,7 +494,26 @@ char *slurp_file(const char *filename, off_t *r_size)
 		die("Cannot stat: %s: %s\n",
 			filename, strerror(errno));
 	}
-	size = stats.st_size;
+	/*
+	 * Seek in case the kernel is a character node like /dev/ubi0_0.
+	 * This does not work on regular files which live in /proc and
+	 * we need this for some /proc/device-tree entries
+	 */
+	if (S_ISCHR(stats.st_mode)) {
+
+		size = lseek(fd, 0, SEEK_END);
+		if (size < 0)
+			die("Can not seek file %s: %s\n", filename,
+					strerror(errno));
+
+		err = lseek(fd, 0, SEEK_SET);
+		if (err < 0)
+			die("Can not seek to the begin of file %s: %s\n",
+					filename, strerror(errno));
+	} else {
+		size = stats.st_size;
+	}
+
 	*r_size = size;
 	buf = xmalloc(size);
 	progress = 0;
@@ -554,67 +580,18 @@ char *slurp_file_len(const char *filename, off_t size)
 	return buf;
 }
 
-#if HAVE_LIBZ
 char *slurp_decompress_file(const char *filename, off_t *r_size)
 {
-	gzFile fp;
-	int errnum;
-	const char *msg;
-	char *buf;
-	off_t size, allocated;
-	ssize_t result;
+	char *kernel_buf;
 
-	if (!filename) {
-		*r_size = 0;
-		return 0;
+	kernel_buf = zlib_decompress_file(filename, r_size);
+	if (!kernel_buf) {
+		kernel_buf = lzma_decompress_file(filename, r_size);
+		if (!kernel_buf)
+			return slurp_file(filename, r_size);
 	}
-	fp = gzopen(filename, "rb");
-	if (fp == 0) {
-		msg = gzerror(fp, &errnum);
-		if (errnum == Z_ERRNO) {
-			msg = strerror(errno);
-		}
-		die("Cannot open `%s': %s\n", filename, msg);
-	}
-	size = 0;
-	allocated = 65536;
-	buf = xmalloc(allocated);
-	do {
-		if (size == allocated) {
-			allocated <<= 1;
-			buf = xrealloc(buf, allocated);
-		}
-		result = gzread(fp, buf + size, allocated - size);
-		if (result < 0) {
-			if ((errno == EINTR) || (errno == EAGAIN))
-				continue;
-
-			msg = gzerror(fp, &errnum);
-			if (errnum == Z_ERRNO) {
-				msg = strerror(errno);
-			}
-			die ("read on %s of %ld bytes failed: %s\n",
-				filename, (allocated - size) + 0UL, msg);
-		}
-		size += result;
-	} while(result > 0);
-	result = gzclose(fp);
-	if (result != Z_OK) {
-		msg = gzerror(fp, &errnum);
-		if (errnum == Z_ERRNO) {
-			msg = strerror(errno);
-		}
-		die ("Close of %s failed: %s\n", filename, msg);
-	}
-	*r_size =  size;
-	return buf;
+	return kernel_buf;
 }
-#else
-char *slurp_decompress_file(const char *filename, off_t *r_size)
-{
-	return slurp_file(filename, r_size);
-}
-#endif
 
 static void update_purgatory(struct kexec_info *info)
 {
@@ -737,17 +714,19 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 			}
 		}
 	}
+	/* Figure out our native architecture before load */
+	native_arch = physical_arch();
+	if (native_arch < 0) {
+		return -1;
+	}
+	info.kexec_flags |= native_arch;
+
 	if (file_type[i].load(argc, argv, kernel_buf,
 			      kernel_size, &info) < 0) {
 		fprintf(stderr, "Cannot load %s\n", kernel);
 		return -1;
 	}
 	/* If we are not in native mode setup an appropriate trampoline */
-	native_arch = physical_arch();
-	if (native_arch < 0) {
-		return -1;
-	}
-	info.kexec_flags |= native_arch;
 	if (arch_compat_trampoline(&info) < 0) {
 		return -1;
 	}
@@ -933,15 +912,32 @@ void usage(void)
 
 static int kexec_loaded(void)
 {
-	int ret;
+	long ret = -1;
 	FILE *fp;
+	char *p;
+	char line[3];
 
 	fp = fopen("/sys/kernel/kexec_loaded", "r");
 	if (fp == NULL)
 		return -1;
-	fscanf(fp, "%d", &ret);
+
+	p = fgets(line, sizeof(line), fp);
 	fclose(fp);
-	return ret;
+
+	if (p == NULL)
+		return -1;
+
+	ret = strtol(line, &p, 10);
+
+	/* Too long */
+	if (ret > INT_MAX)
+		return -1;
+
+	/* No digits were found */
+	if (p == line)
+		return -1;
+
+	return (int)ret;
 }
 
 /*
@@ -989,24 +985,28 @@ static void remove_parameter(char *line, const char *param_name)
 char *get_command_line(void)
 {
 	FILE *fp;
-	size_t len;
-	char *line = NULL;
+	char *line;
+	const int sizeof_line = 2048;
+
+	line = malloc(sizeof_line);
+	if (line == NULL)
+		die("Could not allocate memory to read /proc/cmdline.");
 
 	fp = fopen("/proc/cmdline", "r");
 	if (!fp)
-		die("Could not read /proc/cmdline.");
-	getline(&line, &len, fp);
+		die("Could not open /proc/cmdline.");
+
+	if (fgets(line, sizeof_line, fp) == NULL)
+		die("Can't read /proc/cmdline.");
+
 	fclose(fp);
 
-	if (line) {
-		/* strip newline */
-		*(line + strlen(line) - 1) = 0;
+	/* strip newline */
+	line[strlen(line) - 1] = '\0';
 
-		remove_parameter(line, "BOOT_IMAGE");
-		if (kexec_flags & KEXEC_ON_CRASH)
-			remove_parameter(line, "crashkernel");
-	} else
-		line = strdup("");
+	remove_parameter(line, "BOOT_IMAGE");
+	if (kexec_flags & KEXEC_ON_CRASH)
+		remove_parameter(line, "crashkernel");
 
 	return line;
 }
@@ -1021,6 +1021,22 @@ void check_reuse_initrd(void)
 		    "retain the initrd for reuse.\n");
 
 	free(line);
+}
+
+char *concat_cmdline(const char *base, const char *append)
+{
+	char *cmdline;
+	if (!base && !append)
+		return NULL;
+	if (append && !base)
+		return xstrdup(append);
+	if (base && !append)
+		return xstrdup(base);
+	cmdline = xmalloc(strlen(base) + 1 + strlen(append) + 1);
+	strcpy(cmdline, base);
+	strcat(cmdline, " ");
+	strcat(cmdline, append);
+	return cmdline;
 }
 
 
@@ -1041,15 +1057,17 @@ int main(int argc, char *argv[])
 	int result = 0;
 	int fileind;
 	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
+		KEXEC_ALL_OPTIONS
 		{ 0, 0, 0, 0},
 	};
-	static const char short_options[] = KEXEC_OPT_STR;
+	static const char short_options[] = KEXEC_ALL_OPT_STR;
 
-	opterr = 0; /* Don't complain about unrecognized options here */
+	arch_init();
+
 	while ((opt = getopt_long(argc, argv, short_options,
 				  options, 0)) != -1) {
 		switch(opt) {
+		case '?':
 		case OPT_HELP:
 			usage();
 			return 0;

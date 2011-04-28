@@ -36,10 +36,11 @@ static struct memory_range memory_range[MAX_MEMORY_RANGES];
  *  - (-1) if something went wrong.
  */
 
-int get_memory_ranges(struct memory_range **range, int *ranges, unsigned long flags)
+int get_memory_ranges(struct memory_range **range, int *ranges,
+		      unsigned long UNUSED(flags))
 {
 	char sys_ram[] = "System RAM\n";
-	char *iomem = proc_iomem();
+	const char *iomem = proc_iomem();
 	FILE *fp;
 	char line[80];
 	int current_range = 0;
@@ -89,7 +90,7 @@ void arch_usage(void)
 {
 }
 
-int arch_process_options(int argc, char **argv)
+int arch_process_options(int UNUSED(argc), char **UNUSED(argv))
 {
 	return 0;
 }
@@ -97,15 +98,15 @@ int arch_process_options(int argc, char **argv)
 const struct arch_map_entry arches[] = {
 	{ "s390", KEXEC_ARCH_S390 },
 	{ "s390x", KEXEC_ARCH_S390 },
-	{ 0 },
+	{ NULL, 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }
 
-void arch_update_purgatory(struct kexec_info *info)
+void arch_update_purgatory(struct kexec_info *UNUSED(info))
 {
 }
 

@@ -23,7 +23,7 @@ static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
 /* Return a sorted list of available memory ranges. */
 int get_memory_ranges(struct memory_range **range, int *ranges,
-		unsigned long kexec_flags)
+		unsigned long UNUSED(kexec_flags))
 {
 	const char *iomem = proc_iomem();
 	int memory_ranges = 0;
@@ -74,6 +74,9 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 
 /* Supported file types and callbacks */
 struct file_type file_type[] = {
+	/* uImage is probed before zImage because the latter also accepts
+	   uncompressed images. */
+	{"uImage", uImage_arm_probe, uImage_arm_load, zImage_arm_usage},
 	{"zImage", zImage_arm_probe, zImage_arm_load, zImage_arm_usage},
 };
 int file_types = sizeof(file_type) / sizeof(file_type[0]);
@@ -83,46 +86,21 @@ void arch_usage(void)
 {
 }
 
-static struct {
-} arch_options = {
-};
 int arch_process_options(int argc, char **argv)
 {
-	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
-		{ 0,			0, NULL, 0 },
-	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR;
-	int opt;
-
-	opterr = 0; /* Don't complain about unrecognized options here */
-	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
-		switch(opt) {
-		default:
-			break;
-		}
-	}
-	/* Reset getopt for the next pass; called in other source modules */
-	opterr = 1;
-	optind = 1;
 	return 0;
 }
 
 const struct arch_map_entry arches[] = {
 	{ "arm", KEXEC_ARCH_ARM },
-	{ 0 },
+	{ NULL, 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }
 
-void arch_update_purgatory(struct kexec_info *info)
+void arch_update_purgatory(struct kexec_info *UNUSED(info))
 {
-}
-
-int is_crashkernel_mem_reserved(void)
-{
-	return 0; /* kdump is not supported on this platform (yet) */
 }

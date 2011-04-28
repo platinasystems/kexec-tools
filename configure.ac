@@ -4,12 +4,12 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.1)
+AC_INIT(kexec-tools, 2.0.2)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
 
-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "13th August 2009",
+AC_DEFINE_UNQUOTED(PACKAGE_DATE, "`date '+%d %B %Y'`",
 		[Define to the release date of this package])
 
 
@@ -39,7 +39,7 @@ case $target_cpu in
 	sh4|sh4a|sh3|sh )
 		ARCH="sh"
 		;;
-	mips|mipsel )
+	mips* )
 		ARCH="mips"
 		;;
 	cris|crisv32 )
@@ -78,6 +78,9 @@ AC_ARG_WITH([gamecube],
 
 AC_ARG_WITH([zlib], AC_HELP_STRING([--without-zlib],[disable zlib support]),
 	[ with_zlib="$withval"], [ with_zlib=yes ] )
+
+AC_ARG_WITH([lzma], AC_HELP_STRING([--without-lzma],[disable lzma support]),
+	[ with_lzma="$withval"], [ with_lzma=yes ] )
 
 AC_ARG_WITH([xen], AC_HELP_STRING([--without-xen],
 	[disable extended xen support]), [ with_xen="$withval"], [ with_xen=yes ] )
@@ -142,6 +145,13 @@ if test "$with_zlib" = yes ; then
 		AC_MSG_NOTICE([zlib support disabled])))
 fi
 
+dnl See if I have a usable copy of lzma available
+if test "$with_lzma" = yes ; then
+	AC_CHECK_HEADER(lzma.h,
+		AC_CHECK_LIB(lzma, lzma_code, ,
+		AC_MSG_NOTICE([lzma support disabled])))
+fi
+
 dnl find Xen control stack libraries
 if test "$with_xen" = yes ; then
 	AC_CHECK_HEADER(xenctrl.h,
@@ -149,24 +159,33 @@ if test "$with_xen" = yes ; then
 		AC_MSG_NOTICE([Xen support disabled])))
 fi
 
-dnl ---Sanity checks
-if test "$CC"      = "no"; then AC_MSG_ERROR([cc not found]) fi
-if test "$CPP"     = "no"; then AC_MSG_ERROR([cpp not found]) fi
-if test "$LD"      = "no"; then AC_MSG_ERROR([ld not found]) fi
-if test "$AS"      = "no"; then AC_MSG_ERROR([as not found]) fi
-if test "$OBJCOPY" = "no"; then	AC_MSG_ERROR([objcopy not found]) fi
-if test "$AR"      = "no"; then	AC_MSG_ERROR([ar not found]) fi
+dnl new toolchains
+if test "$ARCH" = ppc; then
+AC_ARG_WITH([oldtoolchain],
+		AC_HELP_STRING([--with-oldtoolchain],[compile without crt.S
+			required for new toolchains]),
+		AC_DEFINE(PPC_OLDTOOLCHAIN, 1,
+			[Define to compile with old toolchains]))
+fi
 
-if test "$MKDIR"   = "no"; then AC_MSG_ERROR([ mkdir not found]) fi 
-if test "$RM"      = "no"; then AC_MSG_ERROR([ rm not found]) fi    
-if test "$CP"      = "no"; then AC_MSG_ERROR([ cp not found]) fi    
-if test "$LN"      = "no"; then AC_MSG_ERROR([ ln not found]) fi    
-if test "$TAR"     = "no"; then AC_MSG_ERROR([ tar not found]) fi   
-if test "$RPM"     = "no"; then AC_MSG_ERROR([ rpm not found]) fi   
-if test "$SED"     = "no"; then AC_MSG_ERROR([ sed not found]) fi   
-if test "$FIND"    = "no"; then AC_MSG_ERROR([ find not found]) fi  
-if test "$XARGS"   = "no"; then AC_MSG_ERROR([ xargs not found]) fi 
-if test "$DIRNAME" = "no"; then AC_MSG_ERROR([ dirname not found]) fi 
+dnl ---Sanity checks
+if test "$CC"      = "no"; then AC_MSG_ERROR([cc not found]); fi
+if test "$CPP"     = "no"; then AC_MSG_ERROR([cpp not found]); fi
+if test "$LD"      = "no"; then AC_MSG_ERROR([ld not found]); fi
+if test "$AS"      = "no"; then AC_MSG_ERROR([as not found]); fi
+if test "$OBJCOPY" = "no"; then	AC_MSG_ERROR([objcopy not found]); fi
+if test "$AR"      = "no"; then	AC_MSG_ERROR([ar not found]); fi
+
+if test "$MKDIR"   = "no"; then AC_MSG_ERROR([ mkdir not found]); fi
+if test "$RM"      = "no"; then AC_MSG_ERROR([ rm not found]); fi
+if test "$CP"      = "no"; then AC_MSG_ERROR([ cp not found]); fi
+if test "$LN"      = "no"; then AC_MSG_ERROR([ ln not found]); fi
+if test "$TAR"     = "no"; then AC_MSG_ERROR([ tar not found]); fi
+if test "$RPM"     = "no"; then AC_MSG_ERROR([ rpm not found]); fi
+if test "$SED"     = "no"; then AC_MSG_ERROR([ sed not found]); fi
+if test "$FIND"    = "no"; then AC_MSG_ERROR([ find not found]); fi
+if test "$XARGS"   = "no"; then AC_MSG_ERROR([ xargs not found]); fi
+if test "$DIRNAME" = "no"; then AC_MSG_ERROR([ dirname not found]); fi
 
 dnl ---Output variables...
 AC_SUBST([BUILD_CC])

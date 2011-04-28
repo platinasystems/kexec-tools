@@ -22,6 +22,8 @@ KEXEC_SRCS += kexec/firmware_memmap.c
 KEXEC_SRCS += kexec/crashdump.c
 KEXEC_SRCS += kexec/crashdump-xen.c
 KEXEC_SRCS += kexec/phys_arch.c
+KEXEC_SRCS += kexec/lzma.c
+KEXEC_SRCS += kexec/zlib.c
 
 KEXEC_GENERATED_SRCS += $(PURGATORY_HEX_C)
 
@@ -30,18 +32,23 @@ dist += kexec/Makefile $(KEXEC_SRCS) $(KEXEC_GENERATED_SRCS)	\
 	kexec/crashdump.h kexec/firmware_memmap.h		\
 	kexec/kexec-elf-boot.h					\
 	kexec/kexec-elf.h kexec/kexec-sha256.h			\
+	kexec/kexec-zlib.h kexec/kexec-lzma.h			\
 	kexec/kexec-syscall.h kexec/kexec.h kexec/kexec.8
 
 $(ARCH)_PROC_IOMEM		= kexec/proc_iomem.c
 KEXEC_SRCS += $($(ARCH)_PROC_IOMEM)
 $(ARCH)_VIRT_TO_PHYS		= kexec/virt_to_phys.c
 KEXEC_SRCS += $($(ARCH)_VIRT_TO_PHYS)
+$(ARCH)_PHYS_TO_VIRT		= kexec/phys_to_virt.c
+KEXEC_SRCS += $($(ARCH)_PHYS_TO_VIRT)
 $(ARCH)_ADD_SEGMENT		= kexec/add_segment.c
 KEXEC_SRCS += $($(ARCH)_ADD_SEGMENT)
 $(ARCH)_ADD_BUFFER		= kexec/add_buffer.c
 KEXEC_SRCS += $($(ARCH)_ADD_BUFFER)
 $(ARCH)_ARCH_REUSE_INITRD	= kexec/arch_reuse_initrd.c
 KEXEC_SRCS += $($(ARCH)_ARCH_REUSE_INITRD)
+$(ARCH)_ARCH_INIT		= kexec/arch_init.c
+KEXEC_SRCS += $($(ARCH)_ARCH_INIT)
 
 include $(srcdir)/kexec/arch/alpha/Makefile
 include $(srcdir)/kexec/arch/arm/Makefile

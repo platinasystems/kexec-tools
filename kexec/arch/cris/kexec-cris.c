@@ -23,7 +23,8 @@
 static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
 /* Return a sorted list of memory ranges. */
-int get_memory_ranges(struct memory_range **range, int *ranges, unsigned long kexec_flags)
+int get_memory_ranges(struct memory_range **range, int *ranges,
+		      unsigned long UNUSED(kexec_flags))
 {
 	int memory_ranges = 0;
 
@@ -53,23 +54,6 @@ void arch_usage(void)
 
 int arch_process_options(int argc, char **argv)
 {
-	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
-		{ 0,                    0, NULL, 0 },
-	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR;
-	int opt;
-
-	opterr = 0; /* Don't complain about unrecognized options here */
-	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
-		switch(opt) {
-		default:
-			break;
-		}
-	}
-	/* Reset getopt for the next pass; called in other source modules */
-	opterr = 1;
-	optind = 1;
 	return 0;
 }
 
@@ -79,12 +63,12 @@ const struct arch_map_entry arches[] = {
 	{ 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }
 
-void arch_update_purgatory(struct kexec_info *info)
+void arch_update_purgatory(struct kexec_info *UNUSED(info))
 {
 }
 

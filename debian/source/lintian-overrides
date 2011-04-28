@@ -1,0 +1,7 @@
+# Upstream uses rather old config files. We just have to tolerate it
+# until upstream updates it
+kexec-tools source: outdated-autotools-helper-file config/config.sub 2004-06-24
+kexec-tools source: outdated-autotools-helper-file config/config.guess 2004-08-13
+# Upstream configure script updates timestamp in include/config.h which causes
+# a diff to be included in the diff file. Ignore this
+kexec-tools source: patch-system-but-direct-changes-in-diff include/config.h

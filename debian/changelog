@@ -1,3 +1,13 @@
+kexec-tools (1:2.0.2-1) unstable; urgency=low
+
+  * New upstream release (closes: Bug#623814)
+  * Updated watch file (closes: Bug#623813)
+  * Updated URL in copyright file
+  * Updated linitian overrides file to match path name for new lintian
+  * Added source/lintian-overrides file to override innocuous lintian errors
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 28 Apr 2011 13:06:41 -0600
+
 kexec-tools (1:2.0.1-4) unstable; urgency=low
 
   * Fix pending l10n issues. Debconf translations:

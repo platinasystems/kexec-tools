@@ -43,7 +43,7 @@ int beoboot_probe(const char *buf, off_t len)
 	struct beoboot_header bb_header;
 	const char *cmdline, *kernel;
 	int result;
-	if (len < sizeof(bb_header)) {
+	if ((uintmax_t)len < (uintmax_t)sizeof(bb_header)) {
 		return -1;
 	}
 	memcpy(&bb_header, buf, sizeof(bb_header));
@@ -75,7 +75,7 @@ void beoboot_usage(void)
 #define KERN32_BASE  0x100000 /* 1MB */
 #define INITRD_BASE 0x1000000 /* 16MB */
 
-int beoboot_load(int argc, char **argv, const char *buf, off_t len,
+int beoboot_load(int argc, char **argv, const char *buf, off_t UNUSED(len),
 	struct kexec_info *info)
 {
 	struct beoboot_header bb_header;
@@ -84,7 +84,8 @@ int beoboot_load(int argc, char **argv, const char *buf, off_t len,
 	int debug, real_mode_entry;
 	int opt;
 	int result;
-#define OPT_REAL_MODE	(OPT_ARCH_MAX+0)
+
+	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "debug",		0, 0, OPT_DEBUG },

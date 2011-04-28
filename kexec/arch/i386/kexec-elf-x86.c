@@ -88,8 +88,8 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
 	struct mem_ehdr ehdr;
-	const char *command_line;
-	char *modified_cmdline;
+	char *command_line = NULL, *modified_cmdline = NULL;
+	const char *append = NULL;
 	int command_line_len;
 	int modified_cmdline_len;
 	const char *ramdisk;
@@ -99,18 +99,13 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 #define ARG_STYLE_LINUX 1
 #define ARG_STYLE_NONE  2
 	int opt;
-#define OPT_APPEND		(OPT_ARCH_MAX+0)
-#define OPT_REUSE_CMDLINE	(OPT_ARCH_MAX+1)
-#define OPT_RAMDISK		(OPT_ARCH_MAX+2)
-#define OPT_ARGS_ELF    	(OPT_ARCH_MAX+3)
-#define OPT_ARGS_LINUX  	(OPT_ARCH_MAX+4)
-#define OPT_ARGS_NONE   	(OPT_ARCH_MAX+5)
 
+	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "command-line",	1, NULL, OPT_APPEND },
 		{ "append",		1, NULL, OPT_APPEND },
-		{ "reuse-cmdline",	1, NULL, OPT_REUSE_CMDLINE },
+		{ "reuse-cmdline",	0, NULL, OPT_REUSE_CMDLINE },
 		{ "initrd",		1, NULL, OPT_RAMDISK },
 		{ "ramdisk",		1, NULL, OPT_RAMDISK },
 		{ "args-elf",		0, NULL, OPT_ARGS_ELF },
@@ -125,7 +120,6 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 	 * Parse the command line arguments
 	 */
 	arg_style = ARG_STYLE_ELF;
-	command_line = 0;
 	modified_cmdline = 0;
 	modified_cmdline_len = 0;
 	ramdisk = 0;
@@ -140,7 +134,7 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 			usage();
 			return -1;
 		case OPT_APPEND:
-			command_line = optarg;
+			append = optarg;
 			break;
 		case OPT_REUSE_CMDLINE:
 			command_line = get_command_line();
@@ -163,6 +157,7 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 			break;
 		}
 	}
+	command_line = concat_cmdline(command_line, append);
 	command_line_len = 0;
 	if (command_line) {
 		command_line_len = strlen(command_line) +1;
@@ -191,7 +186,7 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 	/* Do we want arguments? */
 	if (arg_style != ARG_STYLE_NONE) {
 		/* Load the setup code */
-		elf_rel_build_load(info, &info->rhdr, (char *) purgatory, purgatory_size,
+		elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
 			0, ULONG_MAX, 1, 0);
 	}
 	if (arg_style == ARG_STYLE_NONE) {
@@ -205,7 +200,7 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 
 		/* Setup the ELF boot notes */
 		note_base = elf_boot_notes(info, max_addr,
-			(unsigned char *) command_line, command_line_len);
+					   command_line, command_line_len);
 
 		/* Initialize the stack arguments */
 		arg2 = 0; /* No return address */
@@ -226,7 +221,7 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 	else if (arg_style == ARG_STYLE_LINUX) {
 		struct x86_linux_faked_param_header *hdr;
 		unsigned long param_base;
-		const unsigned char *ramdisk_buf;
+		const char *ramdisk_buf;
 		off_t ramdisk_length;
 		struct entry32_regs regs;
 		int rc = 0;
@@ -253,7 +248,7 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 		ramdisk_buf = NULL;
 		ramdisk_length = 0;
 		if (ramdisk) {
-			ramdisk_buf = (unsigned char *) slurp_file(ramdisk, &ramdisk_length);
+			ramdisk_buf = slurp_file(ramdisk, &ramdisk_length);
 		}
 
 		/* If panic kernel is being loaded, additional segments need
@@ -264,8 +259,10 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 			if (rc < 0)
 				return -1;
 			/* Use new command line. */
+			free(command_line);
 			command_line = modified_cmdline;
 			command_line_len = strlen(modified_cmdline) + 1;
+			modified_cmdline = NULL;
 		}
 
 		/* Tell the kernel what is going on */
@@ -288,5 +285,8 @@ int elf_x86_load(int argc, char **argv, const char *buf, off_t len,
 	else {
 		die("Unknown argument style\n");
 	}
+
+	free(command_line);
+	free(modified_cmdline);
 	return 0;
 }

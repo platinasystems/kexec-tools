@@ -74,10 +74,10 @@ static struct {
 int arch_process_options(int argc, char **argv)
 {
 	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
+		KEXEC_ALL_OPTIONS
 		{ 0, 			0, NULL, 0 },
 	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR;
+	static const char short_options[] = KEXEC_ALL_OPT_STR;
 	int opt;
 	unsigned long value;
 	char *end;
@@ -145,10 +145,10 @@ const struct arch_map_entry arches[] = {
 	 * use KEXEC_ARCH_DEFAULT instead of KEXEC_ARCH_X86_64 here.
 	 */
 	{ "x86_64", KEXEC_ARCH_DEFAULT },
-	{ 0 },
+	{ NULL, 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }

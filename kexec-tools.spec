@@ -1,15 +1,15 @@
 Summary: Load one kernel from another
 Name: kexec-tools
-Version: 2.0.1
+Version: 2.0.2
 Release: 0
-Copyright: GPL
+License: GPL
 Group: Development/Tools
 Source0:%{name}-%{version}.tar.gz
 Packager: Eric Biederman <ebiederman@xmission.com>
 BuildRoot: %{_tmppath}/%{name}
 
 %description
-/sbin/kexec is a user space utiltity for loading another kernel
+/sbin/kexec is a user space utility for loading another kernel
 and asking the currently running kernel to do something with it.
 A currently running kernel may be asked to start the loaded
 kernel on reboot, or to start the loaded kernel after it panics.
@@ -30,6 +30,8 @@ make install DESTDIR=${RPM_BUILD_ROOT}
 %files
 %defattr(-,root,root)
 %{_sbindir}/kexec
+%{_sbindir}/kdump
+%{_libdir}/%{name}/kexec_test
 %doc News
 %doc COPYING
 %doc TODO
