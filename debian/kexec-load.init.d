@@ -10,12 +10,56 @@
 # Description:
 ### END INIT INFO
 
-PATH=/usr/sbin:/usr/bin:/sbin:/bin
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
 NOKEXECFILE=/tmp/no-kexec-reboot
 
 . /lib/lsb/init-functions
 
 test -r /etc/default/kexec && . /etc/default/kexec
+
+process_grub_entry() {
+	initrd_image=
+	while read command args; do
+		if [ "$command" = "linux" ]; then
+			echo "$args" | while read kernel append; do
+			echo KERNEL_IMAGE=\"${kernel}\"
+			echo APPEND=\"${append}\"
+			done
+		elif [ "$command" = "initrd" ]; then
+			initrd_image=${args}
+		fi
+	done
+	echo INITRD=\"$initrd_image\"
+}
+
+get_grub_kernel() {
+	test -f /boot/grub/grub.cfg || return
+	data=$(cat /boot/grub/grub.cfg)
+
+	default=$(echo "$data" | awk '/^set default/ {print $2}' | cut -d'"' -f2)
+	if [ -z "$default" ]; then
+		default=0
+	fi
+	start_offset=$((default + 1))
+	end_offset=$((default + 2))
+
+	# grub entries start with "menuentry" commands.  Get the line 
+	# numbers that surround the first entry
+	offsets=$(echo "$data" | grep -n ^menuentry | cut -d: -f1)
+	begin=$(echo "$offsets" | tail -n+$start_offset | head -n1)
+	end=$(echo "$offsets" | tail -n+$end_offset | head -n1)
+
+	# If this is the last entry, we need to read to the end of the file
+	# or to the end of boot entry section
+	if [ -z "$end" ]; then
+		numlines=$(echo "$data" | tail --lines=+$begin | grep -n "^### END" | head -1 | cut -d: -f1)
+		end=$((begin + numlines - 1))
+	fi
+
+	length=$((end - begin))
+	entry=$(echo "$data" | tail -n+$begin | head -n$length)
+	eval $(echo "$entry" | process_grub_entry)
+}
 
 do_stop () {
 	test "$LOAD_KEXEC" = "true" || exit 0
@@ -27,6 +71,8 @@ do_stop () {
 		/bin/rm -f $NOKEXECFILE
 		exit 0
 	fi
+
+	test "$USE_GRUB_CONFIG" = "true" && get_grub_kernel
 
 	REAL_APPEND="$APPEND"
 

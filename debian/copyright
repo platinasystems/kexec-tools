@@ -4,9 +4,22 @@ Wed, 27 Jul 2005 10:55:17 -0600.
 It was originally downloaded from: http://www.xmission.com/~ebiederm/files/kexec/
 Versions 20070330 and newer were downloaded from: http://kernel.org/pub/linux/utils/kernel/kexec/
 
-Copyright: 2003-2005 Eric Biederman (ebiederm@xmission.com)
+Copyright: 2003-2010 Various
 
-Upstream Author: Eric Biederman (ebiederm@xmission.com), Albert Herranz, Jesse Barnes (jbarnes@sgi.com), Khalid Aziz (khalid.aziz@hp.com), Hariprasad Nelliteertha (hari@in.ibm.com), Tim Deegan (tjd21@cl.cam.ac.uk), And others...
+Upstream Authors: 
+Eric Biederman <ebiederm@xmission.com>
+Albert Herranz
+Jesse Barnes <jbarnes@sgi.com>
+Khalid Aziz <khalid.aziz@hp.com>
+Hariprasad Nellitheertha <hari@in.ibm.com>
+Tim Deegan <tjd21@cl.cam.ac.uk>
+And others...
+
+Currently maintained by
+P:      Simon Horman
+M:      horms@verge.net.au
+L:      kexec@lists.infradead.org
+
 
 License: 
 

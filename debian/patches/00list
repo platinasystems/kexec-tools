@@ -5,3 +5,4 @@ distclean_fix.dpatch
 update_kexec_manpage.dpatch
 add_debian_readme.dpatch
 coldreboot.dpatch
+linker-option.dpatch

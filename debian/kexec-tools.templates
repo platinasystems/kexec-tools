@@ -5,3 +5,11 @@ _Description: Should kexec-tools handle reboots?
  If you choose this option, a system reboot will trigger a restart
  into a kernel loaded by kexec instead of going through the full
  system bootloader process.
+
+Template: kexec-tools/use_grub_config
+Type: boolean
+Default: false
+_Description: Should kexec-tools e grub2 config file to load kernel?
+ If you choose this option, kexec will read grub2 config file to 
+ determine which kernel and options to load for kexec reboot, as opposed
+ to what is in /etc/default/kexec.

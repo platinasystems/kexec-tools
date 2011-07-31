@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools 20080324-1\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2008-04-25 10:38-0600\n"
+"POT-Creation-Date: 2011-08-02 16:39-0600\n"
 "PO-Revision-Date: 2008-04-28 16:06+0930\n"
 "Last-Translator: Clytie Siddall <clytie@riverland.net.au>\n"
 "Language-Team: Vietnamese <vi-VN@googlegroups.com>\n"
@@ -34,3 +34,18 @@ msgstr ""
 "Bật tùy chọn này thì việc khởi động hệ thống sẽ gây ra tiến trình khởi chạy "
 "lại vào một hạt nhân được kexec nạp, thay vào chạy tiến trình nạp và thực "
 "hiện hệ thống hoàn toàn."
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid "Should kexec-tools e grub2 config file to load kernel?"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid ""
+"If you choose this option, kexec will read grub2 config file to  determine "
+"which kernel and options to load for kexec reboot, as opposed to what is in /"
+"etc/default/kexec."
+msgstr ""

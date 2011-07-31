@@ -1,3 +1,17 @@
+kexec-tools (1:2.0.2-2) unstable; urgency=low
+
+  * Fixed the problem with --no-undefined option being used for gcc. 
+    Applied Matthias's patch (closes: Bug#610517, Bug#624897) 
+  * Replaced copyright info in debian/copyright with list of authors
+    and ensured link to license pionts to GPLv2 (closes: Bug#485679)
+  * Updated PATH in init scripts to make sure /sbin and /bin are searched 
+    before other paths (closes: Bug#581219)
+  * Corrected kexec man page to not say shutdown is called on kexec -e
+    (closes: Bug#609462)
+  * Added option to use grub configuration to load kernel (close: Bug#525356)
+
+ -- Khalid Aziz <khalid@debian.org>  Sun, 31 Jul 2011 14:30:31 -0600
+
 kexec-tools (1:2.0.2-1) unstable; urgency=low
 
   * New upstream release (closes: Bug#623814)
@@ -27,7 +41,7 @@ kexec-tools (1:2.0.1-3) unstable; urgency=low
 kexec-tools (1:2.0.1-2) unstable; urgency=low
 
   * Fixed kernel load failure on "armv5tel" architecture (closes: Bug#564648)
-  * Added a script, codreboot, to force a cold reboot (closes: Bug#519950)
+  * Added a script, coldreboot, to force a cold reboot (closes: Bug#519950)
   * Added dependency dependency upon local filesystem to ensure filesystem
     containing kexec image is not unmounted before kexec-load runs 
     (closes: Bug#578126)

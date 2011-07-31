@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools 20080227-2\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2008-04-25 10:38-0600\n"
+"POT-Creation-Date: 2011-08-02 16:39-0600\n"
 "PO-Revision-Date: 2008-04-28 21:34+2\n"
 "Last-Translator: Steve Petruzzello <dlist@bluewin.ch>\n"
 "Language-Team: French <debian-l10n-french@lists.debian.org>\n"
@@ -32,3 +32,18 @@ msgid ""
 msgstr ""
 "Si vous choisissez cette option, le système redémarrera avec un noyau chargé "
 "par kexec plutôt que par le programme de démarrage habituel. "
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid "Should kexec-tools e grub2 config file to load kernel?"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid ""
+"If you choose this option, kexec will read grub2 config file to  determine "
+"which kernel and options to load for kexec reboot, as opposed to what is in /"
+"etc/default/kexec."
+msgstr ""

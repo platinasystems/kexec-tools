@@ -1,0 +1,27 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## linker-option.dpatch by  <doko@ubuntu.com>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: This patch moves --no-undefined option to linker from gcc in Makefile
+
+@DPATCH@
+
+--- ./purgatory/Makefile.orig	2008-10-08 22:32:14.000000000 +0000
++++ ./purgatory/Makefile	2011-01-19 04:28:51.308229001 +0000
+@@ -55,14 +55,14 @@
+ 			-I$(srcdir)/util_lib/include \
+ 			-I$(shell $(CC) -print-file-name=include)
+ $(PURGATORY): LDFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS)\
+-			--no-undefined -nostartfiles -nostdlib -nodefaultlibs \
++			-Wl,--no-undefined -nostartfiles -nostdlib -nodefaultlibs \
+ 			-e purgatory_start -r
+ 
+ $(PURGATORY): $(PURGATORY_OBJS)
+ 	$(MKDIR) -p $(@D)
+ 	$(CC) $(LDFLAGS) -o $@ $^
+ 
+-#	$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) --no-undefined -e purgatory_start -r -o $@ $(PURGATORY_OBJS) $(UTIL_LIB)
++#	$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) -Wl,--no-undefined -e purgatory_start -r -o $@ $(PURGATORY_OBJS) $(UTIL_LIB)
+ 
+ echo::
+ 	@echo "PURGATORY_SRCS $(PURGATORY_SRCS)"

@@ -13,7 +13,7 @@ diff -urN --exclude=debian kexec-tools-2.0.0/kexec/kexec.8 kexec-tools-2.0.0.deb
  .TP
  .B \-e\ (\-\-exec)
 -Run the currently loaded kernel.
-+Run the currently loaded kernel. Note that it calls shutdown (8)
++Run the currently loaded kernel. Note that it will reboot into the loaded kernel without calling shutdown(8).
  .TP
  .B \-f\ (\-\-force)
  Force an immediate

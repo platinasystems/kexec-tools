@@ -1,4 +1,4 @@
-#! /bin/sh 
+#! /bin/sh
 # postinst script for kexec-tools
 #
 # see: dh_installdeb(1)
@@ -77,15 +77,28 @@ INITRD="/initrd.img"
 
 # If empty, use current /proc/cmdline
 APPEND=""
+
+# Load the default kernel from grub config (true/false)
+USE_GRUB_CONFIG=false
 EOFMAGICNUMBER1234
 }
 
 . ${INITCONFFILE}
+if test -z "$USE_GRUB_CONFIG" ; then
+	echo "" >> ${INITCONFFILE}
+	echo "# Load the default kernel from grub config (true/false)" >> ${INITCONFFILE}
+	echo "USE_GRUB_CONFIG=" >> ${INITCONFFILE}
+fi
+
 # ------------------------- Debconf questions start ---------------------
 
 db_get kexec-tools/load_kexec || RET=true
 new_LOAD_KEXEC="${RET}"
 update_param LOAD_KEXEC
+
+db_get kexec-tools/use_grub_config || RET=true
+new_USE_GRUB_CONFIG="${RET}"
+update_param USE_GRUB_CONFIG
 db_stop
                                                                                                                               
 # ------------------------- Debconf questions end ---------------------

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools 20080324-2\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2008-04-25 10:38-0600\n"
+"POT-Creation-Date: 2011-08-02 16:39-0600\n"
 "PO-Revision-Date: 2008-12-28 22:26+0900\n"
 "Last-Translator: Hideki Yamane (Debian-JP) <henrich@debian.or.jp>\n"
 "Language-Team: Japanese <debian-japanese@lists.debian.org>\n"
@@ -32,3 +32,18 @@ msgstr ""
 "このオプションを選んだ場合、通常システムのブートローダ手順通りではなく、"
 "kexec からロードされたカーネルから再起動するようにシステムの再起動が設定され"
 "ます。"
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid "Should kexec-tools e grub2 config file to load kernel?"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid ""
+"If you choose this option, kexec will read grub2 config file to  determine "
+"which kernel and options to load for kexec reboot, as opposed to what is in /"
+"etc/default/kexec."
+msgstr ""
