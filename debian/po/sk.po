@@ -1,26 +1,29 @@
-# Danish translation kexec-tools.
-# Copyright (C) 2011 kexec-tools & nedenstående oversættere.
+# Slovak translations for kexec-tools package
+# Slovenské preklady pre balík kexec-tools.
+# Copyright (C) 2011 THE kexec-tools'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the kexec-tools package.
-# Joe Hansen <joedalton2@yahoo.dk>, 2010, 2011.
+# Automatically generated, 2011.
+# Slavko <linux@slavino.sk>, 2011.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: kexec-tools\n"
+"Project-Id-Version: kexec-tools 1:2.0.2-3\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
 "POT-Creation-Date: 2011-08-25 18:55+0200\n"
-"PO-Revision-Date: 2011-09-04 05:26+0100\n"
-"Last-Translator: Joe Hansen <joedalton2@yahoo.dk>\n"
-"Language-Team: Danish <debian-l10n-danish@lists.debian.org> \n"
-"Language: \n"
+"PO-Revision-Date: 2011-08-25 21:13+0200\n"
+"Last-Translator: Slavko <linux@slavino.sk>\n"
+"Language-Team: Slovak <debian-l10n-slovak@lists.debian.org>\n"
+"Language: sk\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
 msgid "Should kexec-tools handle reboots?"
-msgstr "Skal kexec-tools håndtere genstarter?"
+msgstr "Majú reštarty obsluhovať nástroje kexec?"
 
 #. Type: boolean
 #. Description
@@ -30,15 +33,15 @@ msgid ""
 "kernel loaded by kexec instead of going through the full system boot loader "
 "process."
 msgstr ""
-"Hvis du vælger denne indstilling, vil en systemgenstart udløse en genstart "
-"med en kerne indlæst af kexec i stedet for at gå igennem den fulde proces "
-"med systemopstart."
+"Ak zvolíte túto možnosť, reštart systému vyvolá reštart do jadra načítaného "
+"pomocou kexec, namiesto vykonania úplného procesu reštartu systému pomocou "
+"zavádzača."
 
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:3001
 msgid "Read GRUB configuration file to load the kernel?"
-msgstr "Læs GRUB-konfigurationsfil for at indlæse kernen?"
+msgstr "Čítať na určenie jadra konfiguračný súbor GRUB?"
 
 #. Type: boolean
 #. Description
@@ -48,6 +51,6 @@ msgid ""
 "determine which kernel and options to load for kexec reboot, as opposed to "
 "what is in /etc/default/kexec."
 msgstr ""
-"Hvis du vælger denne indstilling, vil kexec læse GRUB-konfigurationsfilen "
-"for at bestemme hvilken kerne og hvilke indstillinger at indlæse for kexec-"
-"genstart, til forskel fra hvad der er i /etc/default/kexec."
+"Ak zvolíte túto možnosť, určí kexec jadro a parametre, ktoré má načítať na "
+"reštart pomocou kexec z konfiguračného súboru GRUB, namiesto údajov v /etc/"
+"default/kexec."

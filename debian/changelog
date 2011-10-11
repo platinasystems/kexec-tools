@@ -1,3 +1,30 @@
+kexec-tools (1:2.0.2-3) unstable; urgency=low
+
+  * Added check for link_in_boot in kernel-img.conf and update kexec
+    kernel and initrd locations accordingly in kexec config file 
+    (closes: Bug#577064)
+  * Added a check for /boot/grub directory before asking if kexec should use
+    grub config (Closes: Bug#643306)
+  * Added to SH4 to supported arch and changed arch for udeb to list of 
+    supported Linux platforms (closes: Bug#600778)
+  * Corrected the malformed patch update_kexec_manpage.dpatch
+  * Added build-arch and build-indep targets to debian/rules
+  * Debconf templates and debian/control reviewed by the debian-l10n-
+    english team as part of the Smith review project. Closes: #639226, #636780
+  * [Debconf translation updates]
+  * Slovak (Slavko).  Closes: #639305
+  * Russian (Yuri Kozlov).  Closes: #637753
+  * Swedish (Martin Bagge / brother).  Closes: #640049
+  * French (Steve Petruzzello).  Closes: #640092
+  * Czech (Miroslav Kure).  Closes: #640218
+  * Danish (Joe Hansen).  Closes: #640408
+  * Portuguese (Rui Branco).  Closes: #640858
+  * Dutch; (Jeroen Schot).  Closes: #640989
+  * Spanish; (Camaleón).  Closes: #640994
+  * German (Helge Kreutzmann).  Closes: #641143
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 11 Oct 2011 10:56:59 -0600
+
 kexec-tools (1:2.0.2-2) unstable; urgency=low
 
   * Fixed the problem with --no-undefined option being used for gcc. 

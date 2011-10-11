@@ -83,11 +83,29 @@ USE_GRUB_CONFIG=false
 EOFMAGICNUMBER1234
 }
 
+# Add USE_GRUB_CONFIG parameter to config file if it does not exist
 . ${INITCONFFILE}
 if test -z "$USE_GRUB_CONFIG" ; then
 	echo "" >> ${INITCONFFILE}
 	echo "# Load the default kernel from grub config (true/false)" >> ${INITCONFFILE}
 	echo "USE_GRUB_CONFIG=" >> ${INITCONFFILE}
+fi
+
+# Detect if system is configured to place kernel link under /boot instead of /
+# If yes, update kernel and initrd image locations in config file
+if [ -f /etc/kernel-img.conf ]; then
+	LINK_IN_BOOT=`grep link_in_boot /etc/kernel-img.conf | cut -f2 -d= | tr -d '[:blank:]'`
+	if [ "$LINK_IN_BOOT" = "yes" ]; then
+		sed -e "s/KERNEL_IMAGE=\"\/vmlinuz\"/KERNEL_IMAGE=\"\/boot\/vmlinuz\"/" < ${INITCONFFILE} > ${INITCONFFILE}.$$
+		mv -f ${INITCONFFILE}.$$ $INITCONFFILE
+		sed -e "s/INITRD=\"\/initrd.img\"/INITRD=\"\/boot\/initrd.img\"/" < ${INITCONFFILE} > ${INITCONFFILE}.$$
+		mv -f ${INITCONFFILE}.$$ $INITCONFFILE
+	else
+		sed -e "s/KERNEL_IMAGE=\"\/boot\/vmlinuz\"/KERNEL_IMAGE=\"\/vmlinuz\"/" < ${INITCONFFILE} > ${INITCONFFILE}.$$
+		mv -f ${INITCONFFILE}.$$ $INITCONFFILE
+		sed -e "s/INITRD=\"\/boot\/initrd.img\"/INITRD=\"\/initrd.img\"/" < ${INITCONFFILE} > ${INITCONFFILE}.$$
+		mv -f ${INITCONFFILE}.$$ $INITCONFFILE
+	fi
 fi
 
 # ------------------------- Debconf questions start ---------------------
@@ -96,8 +114,14 @@ db_get kexec-tools/load_kexec || RET=true
 new_LOAD_KEXEC="${RET}"
 update_param LOAD_KEXEC
 
-db_get kexec-tools/use_grub_config || RET=true
-new_USE_GRUB_CONFIG="${RET}"
+if [ -d /boot/grub ]
+then
+	db_get kexec-tools/use_grub_config || RET=true
+	new_USE_GRUB_CONFIG="${RET}"
+else
+	new_USE_GRUB_CONFIG="false"
+	db_set kexec-tools/use_grub_config "false"
+fi
 update_param USE_GRUB_CONFIG
 db_stop
                                                                                                                               

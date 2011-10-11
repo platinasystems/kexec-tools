@@ -31,7 +31,9 @@ configure-stamp:
 	touch configure-stamp
 
 
-build: patch build-stamp
+build: patch build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
 
 build-stamp: configure-stamp 
 	dh_testdir

@@ -4,7 +4,7 @@
 #
 # Changes:
 # - Initial translation
-# Camaleón <noelamac@gmail.com>, 2010
+# Camaleón <noelamac@gmail.com>, 2011
 #
 # - Updates
 #
@@ -29,30 +29,29 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: kexec-tools 2.0.1-2\n"
+"Project-Id-Version: kexec-tools 2.0.2-3\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2011-08-02 16:39-0600\n"
-"PO-Revision-Date: 2010-05-17 00:09+0100\n"
+"POT-Creation-Date: 2011-08-25 18:55+0200\n"
+"PO-Revision-Date: 2011-08-29 12:15+0200\n"
 "Last-Translator: Camaleón <noelamac@gmail.com>\n"
 "Language-Team: Debian Spanish <debian-l10n-spanish@lists.debian.org>\n"
 "Language: \n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Poedit-Language: Spanish\n"
 
 #. Type: boolean
 #. Description
-#: ../kexec-tools.templates:1001
+#: ../kexec-tools.templates:2001
 msgid "Should kexec-tools handle reboots?"
 msgstr "¿Debe kexec-tools gestionar los reinicios del sistema?"
 
 #. Type: boolean
 #. Description
-#: ../kexec-tools.templates:1001
+#: ../kexec-tools.templates:2001
 msgid ""
 "If you choose this option, a system reboot will trigger a restart into a "
-"kernel loaded by kexec instead of going through the full system bootloader "
+"kernel loaded by kexec instead of going through the full system boot loader "
 "process."
 msgstr ""
 "Si selecciona esta opción, al reiniciar el sistema se realizará un reinicio "
@@ -61,15 +60,18 @@ msgstr ""
 
 #. Type: boolean
 #. Description
-#: ../kexec-tools.templates:2001
-msgid "Should kexec-tools e grub2 config file to load kernel?"
-msgstr ""
+#: ../kexec-tools.templates:3001
+msgid "Read GRUB configuration file to load the kernel?"
+msgstr "¿Leer el archivo de configuración de GRUB al cargar el kernel?"
 
 #. Type: boolean
 #. Description
-#: ../kexec-tools.templates:2001
+#: ../kexec-tools.templates:3001
 msgid ""
-"If you choose this option, kexec will read grub2 config file to  determine "
-"which kernel and options to load for kexec reboot, as opposed to what is in /"
-"etc/default/kexec."
+"If you choose this option, kexec will read the GRUB configuration file to "
+"determine which kernel and options to load for kexec reboot, as opposed to "
+"what is in /etc/default/kexec."
 msgstr ""
+"Si selecciona esta opción, kexec leerá el archivo de configuración de GRUB "
+"para determinar el kernel y las opciones que se van a cargar al reiniciar "
+"kexec, en lugar de obtener los valores desde el archivo «/etc/default/kexec»."
