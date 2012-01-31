@@ -49,6 +49,51 @@ static struct memory_range crash_reserved_mem;
  */
 unsigned long long saved_max_mem;
 
+/* Read kernel physical load addr from the file returned by proc_iomem()
+ * (Kernel Code) and store in kexec_info */
+static int get_kernel_paddr(struct crash_elf_info *elf_info)
+{
+	uint64_t start;
+
+	if (xen_present()) /* Kernel not entity mapped under Xen */
+		return 0;
+
+	if (parse_iomem_single("Kernel code\n", &start, NULL) == 0) {
+		elf_info->kern_paddr_start = start;
+#ifdef DEBUG
+		printf("kernel load physical addr start = 0x%lx\n", start);
+#endif
+		return 0;
+	}
+
+	fprintf(stderr, "Cannot determine kernel physical load addr\n");
+	return -1;
+}
+
+static int get_kernel_vaddr_and_size(struct crash_elf_info *elf_info,
+				     unsigned long start_offset)
+{
+	uint64_t end;
+
+	if (!elf_info->kern_paddr_start)
+		return -1;
+
+	elf_info->kern_vaddr_start = elf_info->kern_paddr_start |
+					start_offset;
+	if (parse_iomem_single("Kernel data\n", NULL, &end) == 0) {
+		elf_info->kern_size = end - elf_info->kern_paddr_start;
+#ifdef DEBUG
+		printf("kernel_vaddr= 0x%llx paddr %llx\n",
+				elf_info->kern_vaddr_start,
+				elf_info->kern_paddr_start);
+		printf("kernel size = 0x%llx\n", elf_info->kern_size);
+#endif
+		return 0;
+		}
+	fprintf(stderr, "Cannot determine kernel virtual load addr and  size\n");
+	return -1;
+}
+
 /* Removes crash reserve region from list of memory chunks for whom elf program
  * headers have to be created. Assuming crash reserve region to be a single
  * continuous area fully contained inside one of the memory chunks */
@@ -284,8 +329,6 @@ static struct crash_elf_info elf_info64 = {
 	class: ELFCLASS64,
 	data : ELFDATA2MSB,
 	machine : EM_MIPS,
-	backup_src_start : BACKUP_SRC_START,
-	backup_src_end : BACKUP_SRC_END,
 	page_offset : PAGE_OFFSET,
 	lowmem_limit : MAXMEM,
 };
@@ -294,8 +337,6 @@ static struct crash_elf_info elf_info32 = {
 	class: ELFCLASS32,
 	data : ELFDATA2MSB,
 	machine : EM_MIPS,
-	backup_src_start : BACKUP_SRC_START,
-	backup_src_end : BACKUP_SRC_END,
 	page_offset : PAGE_OFFSET,
 	lowmem_limit : MAXMEM,
 };
@@ -312,10 +353,29 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	unsigned long sz, elfcorehdr;
 	int nr_ranges, align = 1024;
 	struct memory_range *mem_range;
+	crash_create_elf_headers_func crash_create = crash_create_elf32_headers;
+	struct crash_elf_info *elf_info = &elf_info32;
+	unsigned long start_offset = 0x80000000UL;
+
+#ifdef __mips64
+	if (arch_options.core_header_type == CORE_TYPE_ELF64) {
+		elf_info = &elf_info64;
+		crash_create = crash_create_elf64;
+		start_offset = 0xffffffff80000000UL;
+	}
+#endif
+
+	if (get_kernel_paddr(elf_info))
+		return -1;
+
+	if (get_kernel_vaddr_and_size(elf_info, start_offset))
+		return -1;
 
 	if (get_crash_memory_ranges(&mem_range, &nr_ranges) < 0)
 		return -1;
 
+	info->backup_src_start = BACKUP_SRC_START;
+	info->backup_src_size = BACKUP_SRC_SIZE;
 	/* Create a backup region segment to store backup data*/
 	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
 	tmp = xmalloc(sz);
@@ -324,28 +384,9 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 				crash_reserved_mem.start,
 				crash_reserved_mem.end, -1);
 
-#ifdef __mips64
-	/* Create elf header segment and store crash image data. */
-	if (arch_options.core_header_type == CORE_TYPE_ELF64) {
-		if (crash_create_elf64_headers(info, &elf_info64,
-			crash_memory_range, nr_ranges,
-			&tmp, &sz,
-			ELF_CORE_HEADER_ALIGN) < 0)
-			return -1;
-	} else {
-		if (crash_create_elf32_headers(info, &elf_info32,
-			crash_memory_range, nr_ranges,
-			&tmp, &sz,
-			ELF_CORE_HEADER_ALIGN) < 0)
-			return -1;
-	}
-#else
-	if (crash_create_elf32_headers(info, &elf_info32,
-		crash_memory_range, nr_ranges,
-		&tmp, &sz,
-		ELF_CORE_HEADER_ALIGN) < 0)
+	if (crash_create(info, elf_info, crash_memory_range, nr_ranges,
+			 &tmp, &sz, ELF_CORE_HEADER_ALIGN) < 0)
 		return -1;
-#endif
 	elfcorehdr = add_buffer(info, tmp, sz, sz, align,
 		crash_reserved_mem.start,
 		crash_reserved_mem.end, -1);

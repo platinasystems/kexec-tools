@@ -1,0 +1,87 @@
+Index: kexec-tools-2.0.3/kexec/arch/i386/crashdump-x86.c
+===================================================================
+--- kexec-tools-2.0.3.orig/kexec/arch/i386/crashdump-x86.c	2012-01-24 14:10:44.399815836 -0700
++++ kexec-tools-2.0.3/kexec/arch/i386/crashdump-x86.c	2012-01-31 08:11:50.064782273 -0700
+@@ -786,7 +786,9 @@
+ 	memset(memmap_p, 0, sz);
+ 	add_memmap(memmap_p, info->backup_src_start, info->backup_src_size);
+ 	sz = crash_reserved_mem.end - crash_reserved_mem.start +1;
+-	add_memmap(memmap_p, crash_reserved_mem.start, sz);
++	if (add_memmap(memmap_p, crash_reserved_mem.start, sz) < 0) {
++		return ENOCRASHKERNEL;
++	}
+ 
+ 	/* Create a backup region segment to store backup data*/
+ 	if (!(info->kexec_flags & KEXEC_PRESERVE_CONTEXT)) {
+@@ -798,7 +800,7 @@
+ 		dbgprintf("Created backup segment at 0x%lx\n",
+ 			  info->backup_start);
+ 		if (delete_memmap(memmap_p, info->backup_start, sz) < 0)
+-			return -1;
++			return EFAILED;
+ 	}
+ 
+ 	/* Create elf header segment and store crash image data. */
+@@ -807,14 +809,14 @@
+ 					       crash_memory_range, nr_ranges,
+ 					       &tmp, &bufsz,
+ 					       ELF_CORE_HEADER_ALIGN) < 0)
+-			return -1;
++			return EFAILED;
+ 	}
+ 	else {
+ 		if (crash_create_elf32_headers(info, &elf_info,
+ 					       crash_memory_range, nr_ranges,
+ 					       &tmp, &bufsz,
+ 					       ELF_CORE_HEADER_ALIGN) < 0)
+-			return -1;
++			return EFAILED;
+ 	}
+ 	/* the size of the elf headers allocated is returned in 'bufsz' */
+ 
+Index: kexec-tools-2.0.3/kexec/kexec.c
+===================================================================
+--- kexec-tools-2.0.3.orig/kexec/kexec.c	2012-01-24 14:10:44.399815836 -0700
++++ kexec-tools-2.0.3/kexec/kexec.c	2012-01-31 08:14:26.932719380 -0700
+@@ -717,10 +717,20 @@
+ 	}
+ 	info.kexec_flags |= native_arch;
+ 
+-	if (file_type[i].load(argc, argv, kernel_buf,
+-			      kernel_size, &info) < 0) {
+-		fprintf(stderr, "Cannot load %s\n", kernel);
+-		return -1;
++	result = file_type[i].load(argc, argv, kernel_buf, kernel_size, &info);
++ 	if (result < 0) {
++		switch (result) {
++		case ENOCRASHKERNEL:
++			fprintf(stderr,
++				"No crash kernel segment found in /proc/iomem\n"
++				"Please check the crashkernel= boot parameter.\n");
++			break;
++		case EFAILED:
++		default:
++			fprintf(stderr, "Cannot load %s\n", kernel);
++			break;
++		}
++		return result;
+ 	}
+ 	/* If we are not in native mode setup an appropriate trampoline */
+ 	if (arch_compat_trampoline(&info) < 0) {
+Index: kexec-tools-2.0.3/kexec/kexec.h
+===================================================================
+--- kexec-tools-2.0.3.orig/kexec/kexec.h	2012-01-24 14:10:44.399815836 -0700
++++ kexec-tools-2.0.3/kexec/kexec.h	2012-01-31 08:15:57.130183014 -0700
+@@ -57,6 +57,12 @@
+ #error unknwon BYTE_ORDER
+ #endif
+ 
++/*
++ * Document some of the reasons why crashdump may fail, so we can give
++ * better error messages
++ */
++#define EFAILED		-1	/* default error code */
++#define ENOCRASHKERNEL	-2	/* no memory reserved for crashkernel */
+ 
+ /*
+  * This function doesn't actually exist.  The idea is that when someone

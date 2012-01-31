@@ -1,5 +1,8 @@
 /* include/config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to build for BookE */
+#undef CONFIG_BOOKE
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
@@ -36,6 +39,9 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
+/* Define to 1 if you have the `xc_get_machine_memory_map' function. */
+#undef HAVE_XC_GET_MACHINE_MEMORY_MAP
+
 /* Define to the address where bug reports for this package should be sent. */
 #undef PACKAGE_BUGREPORT
 
@@ -56,9 +62,6 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
-
-/* Define to compile with old toolchains */
-#undef PPC_OLDTOOLCHAIN
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS

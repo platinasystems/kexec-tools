@@ -9,7 +9,6 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-include /usr/share/dpatch/dpatch.make
 
 
 CFLAGS = -Wall -g
@@ -20,7 +19,7 @@ else
 	CFLAGS += -O2
 endif
 
-configure: patch configure-stamp
+configure: configure-stamp
 configure-stamp: 
 	dh_testdir
 	# Add here commands to configure the package.
@@ -31,7 +30,7 @@ configure-stamp:
 	touch configure-stamp
 
 
-build: patch build-arch build-indep
+build: build-arch build-indep
 build-arch: build-stamp
 build-indep: build-stamp
 
@@ -43,9 +42,9 @@ build-stamp: configure-stamp
 
 	touch build-stamp
 
-clean: tidy unpatch
+clean: tidy 
 
-tidy: patch configure-stamp 
+tidy: configure-stamp 
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp configure-stamp 

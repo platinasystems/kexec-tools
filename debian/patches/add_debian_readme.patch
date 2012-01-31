@@ -1,0 +1,16 @@
+Index: kexec-tools-2.0.3/README.debian
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ kexec-tools-2.0.3/README.debian	2012-01-31 08:51:26.379799691 -0700
+@@ -0,0 +1,11 @@
++This kexec-tools package was built from kexec-tools git repository at
++<git://git.kernel.org/pub/scm/linux/kernel/git/horms/kexec-tools.git>.
++
++Installing this package also installs two init scripts under /etc/init.d -
++kexec-load and kexec. kexec-load is called upon reboot to load a new kexec
++kernel if kexec is enabled in /etc/default/kexec. kexec script is called
++just before reboot script. It checks if kexec is enabled and a
++kexec'able kernel is loaded. If yes, it kexecs a new kernel instead of
++reboot. As a result, kexec is automatically enabled upon installation of
++kexec-tools package if kexec is enabled in /etc/default/kexec through debconf
++option.

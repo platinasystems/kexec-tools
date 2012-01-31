@@ -1,0 +1,90 @@
+Index: kexec-tools-2.0.3/Makefile.in
+===================================================================
+--- kexec-tools-2.0.3.orig/Makefile.in	2012-01-31 09:01:44.470355831 -0700
++++ kexec-tools-2.0.3/Makefile.in	2012-01-31 09:01:44.504360151 -0700
+@@ -176,11 +176,13 @@
+ PGSRCS:=$(foreach s, $(GENERATED_SRCS), $(PACKAGE_NAME)-$(PACKAGE_VERSION)/$(s))
+ 
+ MAN_PAGES:=$(KEXEC_MANPAGE) $(KDUMP_MANPAGE) $(VMCORE_DMESG_MANPAGE)
++MAN_PAGES+= $(MANDIR)/man8/coldreboot.8
+ BINARIES_i386:=$(KEXEC_TEST) $(KEXEC_TEST)
+ BINARIES_x86_64:=$(KEXEC) $(KDUMP) $(BINARIES_$(ARCH))
+ BINARIES:=$(KEXEC) $(KDUMP) $(VMCORE_DMESG) $(BINARIES_$(ARCH))
++SCRIPTS:=$(SBINDIR)/coldreboot
+ 
+-TARGETS:=$(BINARIES) $(MAN_PAGES)
++TARGETS:=$(BINARIES) $(MAN_PAGES) $(SCRIPTS)
+ 
+ targets: $(TARGETS)
+ 
+Index: kexec-tools-2.0.3/kexec/Makefile
+===================================================================
+--- kexec-tools-2.0.3.orig/kexec/Makefile	2012-01-31 08:58:55.000000000 -0700
++++ kexec-tools-2.0.3/kexec/Makefile	2012-01-31 09:01:44.504360151 -0700
+@@ -71,6 +71,8 @@
+ 
+ KEXEC = $(SBINDIR)/kexec
+ KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
++KEXEC_COLDREBOOT=$(SBINDIR)/coldreboot
++KEXEC_COLDREBOOT_MANPAGE=$(MANDIR)/man8/coldreboot.8
+ 
+ -include $(KEXEC_DEPS)
+ 
+@@ -83,6 +85,16 @@
+ $(KEXEC_MANPAGE): kexec/kexec.8
+ 	@$(MKDIR) -p     $(MANDIR)/man8
+ 	cp kexec/kexec.8 $(KEXEC_MANPAGE)
++
++$(KEXEC_COLDREBOOT): kexec/coldreboot
++	@$(MKDIR) -p     $(@D)
++	cp kexec/coldreboot $(KEXEC_COLDREBOOT)
++	/bin/chmod 755 $(KEXEC_COLDREBOOT)
++
++$(KEXEC_COLDREBOOT_MANPAGE): kexec/coldreboot.8
++	@$(MKDIR) -p     $(MANDIR)/man8
++	cp kexec/coldreboot.8 $(KEXEC_COLDREBOOT_MANPAGE)
++
+ echo::
+ 	@echo "KEXEC_SRCS $(KEXEC_SRCS)"
+ 	@echo "KEXEC_DEPS $(KEXEC_DEPS)"
+Index: kexec-tools-2.0.3/kexec/coldreboot
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ kexec-tools-2.0.3/kexec/coldreboot	2012-01-31 09:01:44.505360279 -0700
+@@ -0,0 +1,6 @@
++#!/bin/sh
++NOKEXECFILE=/tmp/no-kexec-reboot
++
++/bin/rm -f $NOKEXECFILE
++touch $NOKEXECFILE
++/sbin/reboot $*
+Index: kexec-tools-2.0.3/kexec/coldreboot.8
+===================================================================
+--- /dev/null	1970-01-01 00:00:00.000000000 +0000
++++ kexec-tools-2.0.3/kexec/coldreboot.8	2012-01-31 09:02:44.930039936 -0700
+@@ -0,0 +1,25 @@
++.\" Process this file with
++.\" groff -man -Tascii coldreboot.8
++.\"
++.TH kexec 8 "April 2006" Linux "User Manuals"
++.SH NAME
++coldreboot \- Force a cold reboot bypassing kexec-tools default
++.SH SYNOPSIS
++.B /sbin/coldreboot
++.B [reboot options]
++
++.SH DESCRIPTION
++.B coldreboot
++is a script that forces a cold reboot regardless of whether kexec is enabled
++or not in /etc/default/kexec.
++.B coldreboot
++takes the same arguments as /sbin/reboot and passes them on to /sbin/reboot
++later.
++
++.SH NOTES
++.PP
++.B coldreboot
++prevents a kexec kernel from being loaded automatically and thus
++forces a cold reboot. If the user loads a kexec kernel by hand,
++.B coldreboot
++will still result in a kexec reboot.

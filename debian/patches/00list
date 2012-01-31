@@ -1,8 +1,0 @@
-debianize.dpatch
-crashdump_warning.dpatch
-static_binary_warning.dpatch
-distclean_fix.dpatch
-update_kexec_manpage.dpatch
-add_debian_readme.dpatch
-coldreboot.dpatch
-linker-option.dpatch

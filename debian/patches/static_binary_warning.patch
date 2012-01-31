@@ -1,0 +1,20 @@
+Index: kexec-tools-2.0.3/kexec_test/Makefile
+===================================================================
+--- kexec-tools-2.0.3.orig/kexec_test/Makefile	2012-01-24 14:10:44.383816036 -0700
++++ kexec-tools-2.0.3/kexec_test/Makefile	2012-01-31 08:44:23.235020166 -0700
+@@ -20,7 +20,7 @@
+ KEXEC_TEST_OBJS = $(call objify, $(KEXEC_TEST_SRCS))
+ KEXEC_TEST_DEPS = $(call depify, $(KEXEC_TEST_OBJS))
+ 
+-KEXEC_TEST = $(PKGLIBDIR)/kexec_test
++KEXEC_TEST = $(PKGLIBDIR)/kexec_test.static
+ 
+ clean += $(KEXEC_TEST_OBJS) $(KEXEC_TEST_DEPS) $(KEXEC_TEST)
+ 
+@@ -36,5 +36,6 @@
+ $(KEXEC_TEST): $(KEXEC_TEST_OBJS)
+ 	mkdir -p $(@D)
+ 	$(TARGET_LD) $(LDFLAGS) -o $@ $^
++	strip $@
+ 
+ endif

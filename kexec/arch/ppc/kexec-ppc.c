@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #include "../../kexec.h"
@@ -26,10 +27,111 @@
 
 #include "config.h"
 
+unsigned long dt_address_cells = 0, dt_size_cells = 0;
 uint64_t rmo_top;
-unsigned long long crash_base, crash_size;
+unsigned long long crash_base = 0, crash_size = 0;
+unsigned long long initrd_base = 0, initrd_size = 0;
+unsigned long long ramdisk_base = 0, ramdisk_size = 0;
 unsigned int rtas_base, rtas_size;
 int max_memory_ranges;
+const char *ramdisk;
+
+/*
+ * Reads the #address-cells and #size-cells on this platform.
+ * This is used to parse the memory/reg info from the device-tree
+ */
+int init_memory_region_info()
+{
+	size_t res = 0;
+	int fd;
+	char *file;
+
+	file = "/proc/device-tree/#address-cells";
+	fd = open(file, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "Unable to open %s\n", file);
+		return -1;
+	}
+
+	res = read(fd, &dt_address_cells, sizeof(dt_address_cells));
+	if (res != sizeof(dt_address_cells)) {
+		fprintf(stderr, "Error reading %s\n", file);
+		return -1;
+	}
+	close(fd);
+
+	file = "/proc/device-tree/#size-cells";
+	fd = open(file, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "Unable to open %s\n", file);
+		return -1;
+	}
+
+	res = read(fd, &dt_size_cells, sizeof(dt_size_cells));
+	if (res != sizeof(dt_size_cells)) {
+		fprintf(stderr, "Error reading %s\n", file);
+		return -1;
+	}
+	close(fd);
+
+	/* Convert the sizes into bytes */
+	dt_size_cells *= sizeof(unsigned long);
+	dt_address_cells *= sizeof(unsigned long);
+
+	return 0;
+}
+
+#define MAXBYTES 128
+/*
+ * Reads the memory region info from the device-tree node pointed
+ * by @fd and fills the *start, *end with the boundaries of the region
+ */
+int read_memory_region_limits(int fd, unsigned long long *start,
+				unsigned long long *end)
+{
+	char buf[MAXBYTES];
+	unsigned long *p;
+	unsigned long nbytes = dt_address_cells + dt_size_cells;
+
+	if (lseek(fd, 0, SEEK_SET) == -1) {
+		fprintf(stderr, "Error in file seek\n");
+		return -1;
+	}
+	if (read(fd, buf, nbytes) != nbytes) {
+		fprintf(stderr, "Error reading the memory region info\n");
+		return -1;
+	}
+
+	p = (unsigned long*)buf;
+	if (dt_address_cells == sizeof(unsigned long)) {
+		*start = p[0];
+		p++;
+	} else if (dt_address_cells == sizeof(unsigned long long)) {
+		*start = ((unsigned long long *)p)[0];
+		p = (unsigned long long *)p + 1;
+	} else {
+		fprintf(stderr, "Unsupported value for #address-cells : %ld\n",
+					dt_address_cells);
+		return -1;
+	}
+
+	if (dt_size_cells == sizeof(unsigned long))
+		*end = *start + p[0];
+	else if (dt_size_cells == sizeof(unsigned long long))
+		*end = *start + ((unsigned long long *)p)[0];
+	else {
+		fprintf(stderr, "Unsupported value for #size-cells : %ld\n",
+					dt_size_cells);
+		return -1;
+	}
+
+	return 0;
+}
+
+void arch_reuse_initrd(void)
+{
+	reuse_initrd = 1;
+}
 
 #ifdef WITH_GAMECUBE
 #define MAX_MEMORY_RANGES  64
@@ -174,9 +276,6 @@ static int sort_base_ranges(void)
 	return 0;
 }
 
-
-#define MAXBYTES 128
-
 static int realloc_memory_ranges(void)
 {
 	size_t memory_range_len;
@@ -184,11 +283,12 @@ static int realloc_memory_ranges(void)
 	max_memory_ranges++;
 	memory_range_len = sizeof(struct memory_range) * max_memory_ranges;
 
-	memory_range = (struct memory_range *) malloc(memory_range_len);
+	memory_range = (struct memory_range *) realloc(memory_range,
+						       memory_range_len);
 	if (!memory_range)
 		goto err;
 
-	base_memory_range = (struct memory_range *) realloc(memory_range,
+	base_memory_range = (struct memory_range *) realloc(base_memory_range,
 			memory_range_len);
 	if (!base_memory_range)
 		goto err;
@@ -219,9 +319,8 @@ static int get_base_ranges(void)
 	char fname[256];
 	char buf[MAXBYTES];
 	DIR *dir, *dmem;
-	FILE *file;
 	struct dirent *dentry, *mentry;
-	int n;
+	int n, fd;
 
 	if ((dir = opendir(device_tree)) == NULL) {
 		perror(device_tree);
@@ -239,40 +338,39 @@ static int get_base_ranges(void)
 			return -1;
 		}
 		while ((mentry = readdir(dmem)) != NULL) {
+			unsigned long long start, end;
+
 			if (strcmp(mentry->d_name, "reg"))
 				continue;
 			strcat(fname, "/reg");
-			if ((file = fopen(fname, "r")) == NULL) {
+			if ((fd = open(fname, O_RDONLY)) < 0) {
 				perror(fname);
 				closedir(dmem);
 				closedir(dir);
 				return -1;
 			}
-			if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
-				perror(fname);
-				fclose(file);
+			if (read_memory_region_limits(fd, &start, &end) != 0) {
+				close(fd);
 				closedir(dmem);
 				closedir(dir);
 				return -1;
 			}
 			if (local_memory_ranges >= max_memory_ranges) {
 				if (realloc_memory_ranges() < 0){
-					fclose(file);
+					close(fd);
 					break;
 				}
 			}
-			base_memory_range[local_memory_ranges].start =
-				((uint32_t *)buf)[0];
-			base_memory_range[local_memory_ranges].end  =
-				base_memory_range[local_memory_ranges].start +
-				((uint32_t *)buf)[1];
+
+			base_memory_range[local_memory_ranges].start = start;
+			base_memory_range[local_memory_ranges].end  = end;
 			base_memory_range[local_memory_ranges].type = RANGE_RAM;
 			local_memory_ranges++;
 			dbgprintf("%016llx-%016llx : %x\n",
 					base_memory_range[local_memory_ranges-1].start,
 					base_memory_range[local_memory_ranges-1].end,
 					base_memory_range[local_memory_ranges-1].type);
-			fclose(file);
+			close(fd);
 		}
 		closedir(dmem);
 	}
@@ -297,15 +395,13 @@ static int get_devtree_details(unsigned long kexec_flags)
 	unsigned long long htab_base, htab_size;
 	unsigned long long kernel_end;
 	unsigned long long initrd_start, initrd_end;
-	char buf[MAXBYTES-1];
+	char buf[MAXBYTES];
 	char device_tree[256] = "/proc/device-tree/";
 	char fname[256];
 	DIR *dir, *cdir;
 	FILE *file;
 	struct dirent *dentry;
-	struct stat fstat;
 	int n, i = 0;
-	unsigned long tmp_long;
 
 	if ((dir = opendir(device_tree)) == NULL) {
 		perror(device_tree);
@@ -327,73 +423,162 @@ static int get_devtree_details(unsigned long kexec_flags)
 		}
 
 		if (strncmp(dentry->d_name, "chosen", 6) == 0) {
-			strcat(fname, "/linux,kernel-end");
-			file = fopen(fname, "r");
-			if (!file) {
-				perror(fname);
-				goto error_opencdir;
-			}
-			if (fread(&tmp_long, sizeof(unsigned long), 1, file)
-					!= 1) {
-				perror(fname);
-				goto error_openfile;
-			}
-			kernel_end = tmp_long;
-			fclose(file);
-
-			/* Add kernel memory to exclude_range */
-			exclude_range[i].start = 0x0UL;
-			exclude_range[i].end = kernel_end;
-			i++;
-			if (i >= max_memory_ranges)
-				realloc_memory_ranges();
+			/* only reserve kernel region if we are doing a crash kernel */
 			if (kexec_flags & KEXEC_ON_CRASH) {
-				memset(fname, 0, sizeof(fname));
-				strcpy(fname, device_tree);
-				strcat(fname, dentry->d_name);
-				strcat(fname, "/linux,crashkernel-base");
+				strcat(fname, "/linux,kernel-end");
 				file = fopen(fname, "r");
 				if (!file) {
 					perror(fname);
 					goto error_opencdir;
 				}
-				if (fread(&tmp_long, sizeof(unsigned long), 1,
-						file) != 1) {
+				if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
 					perror(fname);
 					goto error_openfile;
 				}
-				crash_base = tmp_long;
+				if (n == sizeof(uint32_t)) {
+					kernel_end = ((uint32_t *)buf)[0];
+				} else if (n == sizeof(uint64_t)) {
+					kernel_end = ((uint64_t *)buf)[0];
+				} else {
+					fprintf(stderr, "%s node has invalid size: %d\n", fname, n);
+					goto error_openfile;
+				}
+				fclose(file);
+
+				/* Add kernel memory to exclude_range */
+				exclude_range[i].start = 0x0UL;
+				exclude_range[i].end = kernel_end;
+				i++;
+				if (i >= max_memory_ranges)
+					realloc_memory_ranges();
+				memset(fname, 0, sizeof(fname));
+				sprintf(fname, "%s%s%s",
+					device_tree, dentry->d_name,
+					"/linux,crashkernel-base");
+				file = fopen(fname, "r");
+				if (!file) {
+					perror(fname);
+					goto error_opencdir;
+				}
+				if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
+					perror(fname);
+					goto error_openfile;
+				}
+				if (n == sizeof(uint32_t)) {
+					crash_base = ((uint32_t *)buf)[0];
+				} else if (n == sizeof(uint64_t)) {
+					crash_base = ((uint64_t *)buf)[0];
+				} else {
+					fprintf(stderr, "%s node has invalid size: %d\n", fname, n);
+					goto error_openfile;
+				}
 				fclose(file);
 
 				memset(fname, 0, sizeof(fname));
-				strcpy(fname, device_tree);
-				strcat(fname, dentry->d_name);
-				strcat(fname, "/linux,crashkernel-size");
+				sprintf(fname, "%s%s%s",
+					device_tree, dentry->d_name,
+					"/linux,crashkernel-size");
 				file = fopen(fname, "r");
 				if (!file) {
 					perror(fname);
 					goto error_opencdir;
 				}
-				if (fread(&tmp_long, sizeof(unsigned long), 1,
-						file) != 1) {
+				if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
 					perror(fname);
 					goto error_openfile;
 				}
-				crash_size = tmp_long;
+				if (n == sizeof(uint32_t)) {
+					crash_size = ((uint32_t *)buf)[0];
+				} else if (n == sizeof(uint64_t)) {
+					crash_size = ((uint64_t *)buf)[0];
+				} else {
+					fprintf(stderr, "%s node has invalid size: %d\n", fname, n);
+					goto error_openfile;
+				}
+				fclose(file);
 
 				if (crash_base > mem_min)
 					mem_min = crash_base;
 				if (crash_base + crash_size < mem_max)
 					mem_max = crash_base + crash_size;
 
+#ifndef CONFIG_BOOKE
 				add_usable_mem_rgns(0, crash_base + crash_size);
+				/* Reserve the region (KDUMP_BACKUP_LIMIT,crash_base) */
 				reserve(KDUMP_BACKUP_LIMIT,
 						crash_base-KDUMP_BACKUP_LIMIT);
+#else
+				add_usable_mem_rgns(crash_base, crash_size);
+#endif
 			}
+			/* reserve the initrd_start and end locations. */
 			memset(fname, 0, sizeof(fname));
-			strcpy(fname, device_tree);
-			strcat(fname, dentry->d_name);
-			strcat(fname, "/linux,htab-base");
+			sprintf(fname, "%s%s%s",
+				device_tree, dentry->d_name,
+				"/linux,initrd-start");
+			file = fopen(fname, "r");
+			if (!file) {
+				errno = 0;
+				initrd_start = 0;
+			} else {
+				if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
+					perror(fname);
+					goto error_openfile;
+				}
+				if (n == sizeof(uint32_t)) {
+					initrd_start = ((uint32_t *)buf)[0];
+				} else if (n == sizeof(uint64_t)) {
+					initrd_start = ((uint64_t *)buf)[0];
+				} else {
+					fprintf(stderr, "%s node has invalid size: %d\n", fname, n);
+					goto error_openfile;
+				}
+				fclose(file);
+			}
+
+			memset(fname, 0, sizeof(fname));
+			sprintf(fname, "%s%s%s",
+				device_tree, dentry->d_name,
+				"/linux,initrd-end");
+			file = fopen(fname, "r");
+			if (!file) {
+				errno = 0;
+				initrd_end = 0;
+			} else {
+				if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
+					perror(fname);
+					goto error_openfile;
+				}
+				if (n == sizeof(uint32_t)) {
+					initrd_end = ((uint32_t *)buf)[0];
+				} else if (n == sizeof(uint64_t)) {
+					initrd_end = ((uint64_t *)buf)[0];
+				} else {
+					fprintf(stderr, "%s node has invalid size: %d\n", fname, n);
+					goto error_openfile;
+				}
+				fclose(file);
+			}
+
+			if ((initrd_end - initrd_start) != 0 ) {
+				initrd_base = initrd_start;
+				initrd_size = initrd_end - initrd_start;
+			}
+
+			if (reuse_initrd) {
+				/* Add initrd address to exclude_range */
+				exclude_range[i].start = initrd_start;
+				exclude_range[i].end = initrd_end;
+				i++;
+				if (i >= max_memory_ranges)
+					realloc_memory_ranges();
+			}
+
+			/* HTAB */
+			memset(fname, 0, sizeof(fname));
+			sprintf(fname, "%s%s%s",
+				device_tree, dentry->d_name,
+				"/linux,htab-base");
 			file = fopen(fname, "r");
 			if (!file) {
 				closedir(cdir);
@@ -411,9 +596,9 @@ static int get_devtree_details(unsigned long kexec_flags)
 				goto error_openfile;
 			}
 			memset(fname, 0, sizeof(fname));
-			strcpy(fname, device_tree);
-			strcat(fname, dentry->d_name);
-			strcat(fname, "/linux,htab-size");
+			sprintf(fname, "%s%s%s",
+				device_tree, dentry->d_name,
+				"/linux,htab-size");
 			file = fopen(fname, "r");
 			if (!file) {
 				perror(fname);
@@ -431,59 +616,7 @@ static int get_devtree_details(unsigned long kexec_flags)
 			if (i >= max_memory_ranges)
 				realloc_memory_ranges();
 
-			/* reserve the initrd_start and end locations. */
-			if (reuse_initrd) {
-				memset(fname, 0, sizeof(fname));
-				strcpy(fname, device_tree);
-				strcat(fname, dentry->d_name);
-				strcat(fname, "/linux,initrd-start");
-				file = fopen(fname, "r");
-				if (!file) {
-					perror(fname);
-					goto error_opencdir;
-				}
-				/* check for 4 and 8 byte initrd offset sizes */
-				if (stat(fname, &fstat) != 0) {
-					perror(fname);
-					goto error_openfile;
-				}
-				if (fread(&initrd_start, fstat.st_size, 1, file)
-						!= 1) {
-					perror(fname);
-					goto error_openfile;
-				}
-				fclose(file);
-
-				memset(fname, 0, sizeof(fname));
-				strcpy(fname, device_tree);
-				strcat(fname, dentry->d_name);
-				strcat(fname, "/linux,initrd-end");
-				file = fopen(fname, "r");
-				if (!file) {
-					perror(fname);
-					goto error_opencdir;
-				}
-				/* check for 4 and 8 byte initrd offset sizes */
-				if (stat(fname, &fstat) != 0) {
-					perror(fname);
-					goto error_openfile;
-				}
-				if (fread(&initrd_end, fstat.st_size, 1, file)
-						!= 1) {
-					perror(fname);
-					goto error_openfile;
-				}
-				fclose(file);
-
-				/* Add initrd address to exclude_range */
-				exclude_range[i].start = initrd_start;
-				exclude_range[i].end = initrd_end;
-				i++;
-				if (i >= max_memory_ranges)
-					realloc_memory_ranges();
-			}
 		} /* chosen */
-
 		if (strncmp(dentry->d_name, "rtas", 4) == 0) {
 			strcat(fname, "/linux,rtas-base");
 			if ((file = fopen(fname, "r")) == NULL) {
@@ -496,9 +629,9 @@ static int get_devtree_details(unsigned long kexec_flags)
 				goto error_openfile;
 			}
 			memset(fname, 0, sizeof(fname));
-			strcpy(fname, device_tree);
-			strcat(fname, dentry->d_name);
-			strcat(fname, "/rtas-size");
+			sprintf(fname, "%s%s%s",
+				device_tree, dentry->d_name,
+				"/linux,rtas-size");
 			if ((file = fopen(fname, "r")) == NULL) {
 				perror(fname);
 				goto error_opencdir;
@@ -519,29 +652,19 @@ static int get_devtree_details(unsigned long kexec_flags)
 
 		if (!strncmp(dentry->d_name, "memory@", 7) ||
 				!strcmp(dentry->d_name, "memory")) {
+			int fd;
 			strcat(fname, "/reg");
-			if ((file = fopen(fname, "r")) == NULL) {
+			if ((fd = open(fname, O_RDONLY)) < 0) {
 				perror(fname);
 				goto error_opencdir;
 			}
-			if ((n = fread(buf, 1, MAXBYTES, file)) < 0) {
-				perror(fname);
+			if (read_memory_region_limits(fd, &rmo_base, &rmo_top) != 0)
 				goto error_openfile;
-			}
-			if (n == 8) {
-				rmo_base = ((uint32_t *)buf)[0];
-				rmo_top = rmo_base + ((uint32_t *)buf)[1];
-			} else if (n == 16) {
-				rmo_base = ((uint64_t *)buf)[0];
-				rmo_top = rmo_base + ((uint64_t *)buf)[1];
-			} else {
-				fprintf(stderr, "Mem node has invalid size: %d\n", n);
-				goto error_openfile;
-			}
+
 			if (rmo_top > 0x30000000UL)
 				rmo_top = 0x30000000UL;
 
-			fclose(file);
+			close(fd);
 			closedir(cdir);
 		} /* memory */
 
@@ -565,9 +688,9 @@ static int get_devtree_details(unsigned long kexec_flags)
 				return -1;
 			}
 			memset(fname, 0, sizeof(fname));
-			strcpy(fname, device_tree);
-			strcat(fname, dentry->d_name);
-			strcat(fname, "/linux,tce-size");
+			sprintf(fname, "%s%s%s",
+				device_tree, dentry->d_name,
+				"/linux,tce-size");
 			file = fopen(fname, "r");
 			if (!file) {
 				perror(fname);
@@ -725,6 +848,11 @@ int get_memory_ranges_dt(struct memory_range **range, int *ranges,
 int get_memory_ranges(struct memory_range **range, int *ranges,
 					unsigned long kexec_flags)
 {
+	int res = 0;
+
+	res = init_memory_region_info();
+	if (res != 0)
+		return res;
 #ifdef WITH_GAMECUBE
 	return get_memory_ranges_gc(range, ranges, kexec_flags);
 #else

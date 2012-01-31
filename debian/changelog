@@ -1,3 +1,12 @@
+kexec-tools (1:2.0.3-1) unstable; urgency=low
+
+  * New upstream release
+  * Switched to dpkg-source 3.0 (quilt) format
+  * Updated kexec and coldreboot man pages (closes: Bug#653197)
+  * Added armhf architecture (closes: Bug#645652)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 31 Jan 2012 09:11:31 -0700
+
 kexec-tools (1:2.0.2-3) unstable; urgency=low
 
   * Added check for link_in_boot in kernel-img.conf and update kexec

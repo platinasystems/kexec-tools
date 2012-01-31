@@ -1,0 +1,13 @@
+Index: kexec-tools-2.0.3/Makefile.in
+===================================================================
+--- kexec-tools-2.0.3.orig/Makefile.in	2012-01-31 08:07:28.146493804 -0700
++++ kexec-tools-2.0.3/Makefile.in	2012-01-31 08:07:36.007492898 -0700
+@@ -89,7 +89,7 @@
+ LOCALSTATEDIR=$(BUILD_PREFIX)/var
+ LIBDIR=$(BUILD_PREFIX)/lib
+ INFODIR=$(BUILD_PREFIX)/info
+-MANDIR=$(BUILD_PREFIX)/man
++MANDIR=$(BUILD_PREFIX)/share/man
+ MAN1DIR=$(MANDIR)/man1
+ MAN2DIR=$(MANDIR)/man2
+ MAN3DIR=$(MANDIR)/man3

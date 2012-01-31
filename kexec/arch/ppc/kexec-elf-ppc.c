@@ -32,7 +32,6 @@
 
 static const int probe_debug = 0;
 
-unsigned long long initrd_base, initrd_size;
 unsigned char reuse_initrd;
 const char *ramdisk;
 int create_flatten_tree(struct kexec_info *, unsigned char **, unsigned long *,
@@ -128,6 +127,8 @@ static const struct option options[] = {
 	KEXEC_ARCH_OPTIONS
 	{"command-line", 1, 0, OPT_APPEND},
 	{"append",       1, 0, OPT_APPEND},
+	{"ramdisk",	 1, 0, OPT_RAMDISK},
+	{"initrd",	 1, 0, OPT_RAMDISK},
 	{"gamecube",     1, 0, OPT_GAMECUBE},
 	{"dtb",     1, 0, OPT_DTB},
 	{"reuse-node",     1, 0, OPT_NODES},
@@ -140,10 +141,12 @@ void elf_ppc_usage(void)
 	printf(
 	     "    --command-line=STRING Set the kernel command line to STRING.\n"
 	     "    --append=STRING       Set the kernel command line to STRING.\n"
+	     "    --ramdisk=<filename>  Initial RAM disk.\n"
+	     "    --initrd=<filename>   same as --ramdisk\n"
 	     "    --gamecube=1|0        Enable/disable support for ELFs with changed\n"
 	     "                          addresses suitable for the GameCube.\n"
-	     "     --dtb=<filename>     Specify device tree blob file.\n"
-	     "     --reuse-node=node    Specify nodes which should be taken from /proc/device-tree.\n"
+	     "    --dtb=<filename>	   Specify device tree blob file.\n"
+	     "    --reuse-node=node	   Specify nodes which should be taken from /proc/device-tree.\n"
 	     "                          Can be set multiple times.\n"
 	     );
 }
@@ -172,27 +175,27 @@ int elf_ppc_load(int argc, char **argv,	const char *buf, off_t len,
 	unsigned char *setup_start;
 	uint32_t setup_size;
 #else
-	unsigned long long *rsvmap_ptr;
-	struct bootblock *bb_ptr;
-	unsigned int nr_segments;
-	unsigned long my_kernel, my_dt_offset;
-	unsigned long my_stack, my_backup_start;
-	unsigned int slave_code[256 / sizeof(unsigned int)], master_entry;
-	unsigned char *seg_buf = NULL;
+	char *seg_buf = NULL;
 	off_t seg_size = 0;
 	int target_is_gamecube = 0;
 	unsigned int addr;
 	unsigned long dtb_addr;
+	unsigned long dtb_addr_actual;
 #endif
+	unsigned long kernel_addr;
 #define FIXUP_ENTRYS	(20)
 	char *fixup_nodes[FIXUP_ENTRYS + 1];
 	int cur_fixup = 0;
 	int opt;
+	char *blob_buf = NULL;
+	off_t blob_size = 0;
 
 	command_line = NULL;
 	dtb = NULL;
 	max_addr = LONG_MAX;
 	hole_addr = 0;
+	kernel_addr = 0;
+	ramdisk = 0;
 
 	while ((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
 		switch (opt) {
@@ -206,6 +209,9 @@ int elf_ppc_load(int argc, char **argv,	const char *buf, off_t len,
 			return -1;
 		case OPT_APPEND:
 			command_line = optarg;
+			break;
+		case OPT_RAMDISK:
+			ramdisk = optarg;
 			break;
 		case OPT_GAMECUBE:
 			target_is_gamecube = atoi(optarg);
@@ -229,7 +235,13 @@ int elf_ppc_load(int argc, char **argv,	const char *buf, off_t len,
 	command_line_len = 0;
 	if (command_line) {
 		command_line_len = strlen(command_line) + 1;
+	} else {
+		command_line = get_command_line();
+		command_line_len = strlen(command_line) + 1;
 	}
+
+	if (ramdisk && reuse_initrd)
+		die("Can't specify --ramdisk or --initrd with --reuseinitrd\n");
 
 	fixup_nodes[cur_fixup] = NULL;
 
@@ -265,11 +277,11 @@ int elf_ppc_load(int argc, char **argv,	const char *buf, off_t len,
 	if (size > phdr->p_memsz)
 		size = phdr->p_memsz;
 
-	hole_addr = locate_hole(info, size, 0, 0, max_addr, 1);
+	kernel_addr = locate_hole(info, size, 0, 0, max_addr, 1);
 #ifdef CONFIG_PPC64
-	ehdr.e_phdr[0].p_paddr = (Elf64_Addr)hole_addr;
+	ehdr.e_phdr[0].p_paddr = (Elf64_Addr)kernel_addr;
 #else
-	ehdr.e_phdr[0].p_paddr = hole_addr;
+	ehdr.e_phdr[0].p_paddr = kernel_addr;
 #endif
 
 	/* Load the Elf data */
@@ -336,113 +348,94 @@ int elf_ppc_load(int argc, char **argv,	const char *buf, off_t len,
 	elf_rel_build_load(info, &info->rhdr, (const char *)purgatory,
 			purgatory_size, 0, elf_max_addr(&ehdr), 1, 0);
 
+	/* Here we need to initialize the device tree, and find out where
+	 * it is going to live so we can place it directly after the
+	 * kernel image */
 	if (dtb) {
-		char *blob_buf;
-		off_t blob_size = 0;
-
 		/* Grab device tree from buffer */
 		blob_buf = slurp_file(dtb, &blob_size);
-		if (!blob_buf || !blob_size)
-			die("Device tree seems to be an empty file.\n");
-		blob_buf = fixup_dtb_nodes(blob_buf, &blob_size, fixup_nodes,
-				cmdline_buf);
-		dtb_addr = add_buffer(info, blob_buf, blob_size, blob_size, 0, 0,
-				KERNEL_ACCESS_TOP, -1);
 	} else {
-		/* create from fs2dt */
-		seg_buf = NULL;
-		seg_size = 0;
-		create_flatten_tree(info, (unsigned char **)&seg_buf,
-				(unsigned long *)&seg_size, cmdline_buf);
-		add_buffer(info, seg_buf, seg_size, seg_size,
-#ifdef CONFIG_PPC64
-				0, 0,  max_addr, -1);
-#else
-		/* load dev tree at 16 Mb offset from kernel load address */
-			0, 0, ehdr.e_phdr[0].p_paddr + SIZE_16M, -1);
-#endif
+		create_flatten_tree(info, (unsigned char **)&blob_buf,
+				(unsigned long *)&blob_size, cmdline_buf);
+	}
+	if (!blob_buf || !blob_size)
+		die("Device tree seems to be an empty file.\n");
+
+	/* initial fixup for device tree */
+	blob_buf = fixup_dtb_init(info, blob_buf, &blob_size, kernel_addr, &dtb_addr);
+
+	if (ramdisk) {
+		seg_buf = slurp_file(ramdisk, &seg_size);
+		/* load the ramdisk *above* the device tree */
+		hole_addr = add_buffer(info, seg_buf, seg_size, seg_size,
+				0, dtb_addr + blob_size + 1,  max_addr, -1);
+		ramdisk_base = hole_addr;
+		ramdisk_size = seg_size;
+	}
+	if (reuse_initrd) {
+		ramdisk_base = initrd_base;
+		ramdisk_size = initrd_size;
 	}
 
+	if (info->kexec_flags & KEXEC_ON_CRASH && ramdisk_base != 0) {
+		if ( (ramdisk_base < crash_base) ||
+			(ramdisk_base > crash_base + crash_size) ) {
+			printf("WARNING: ramdisk is above crashkernel region!\n");
+		}
+		else if (ramdisk_base + initrd_size > crash_base + crash_size) {
+			printf("WARNING: ramdisk overflows crashkernel region!\n");
+		}
+	}
 
-	if (dtb) {
-		/* set various variables for the purgatory */
-		addr = ehdr.e_entry;
-		elf_rel_set_symbol(&info->rhdr, "kernel", &addr, sizeof(addr));
+	/* Perform final fixup on devie tree, i.e. everything beside what
+	 * was done above */
+	fixup_dtb_finalize(info, blob_buf, &blob_size, fixup_nodes,
+			cmdline_buf);
+	dtb_addr_actual = add_buffer(info, blob_buf, blob_size, blob_size, 0, dtb_addr,
+			kernel_addr + KERNEL_ACCESS_TOP, 1);
+	if (dtb_addr_actual != dtb_addr) {
+		die("Error device tree not loadded to address it was expecting to be loaded too!\n");
+	}
 
-		addr = dtb_addr;
-		elf_rel_set_symbol(&info->rhdr, "dt_offset",
-						&addr, sizeof(addr));
+	/* set various variables for the purgatory  ehdr.e_entry is a
+	 * virtual address, we can use kernel_addr which
+	 * should be the physical start address of the kernel */
+	addr = kernel_addr;
+	elf_rel_set_symbol(&info->rhdr, "kernel", &addr, sizeof(addr));
 
-		addr = rmo_top;
-
-		elf_rel_set_symbol(&info->rhdr, "mem_size",
-						&addr, sizeof(addr));
+	addr = dtb_addr;
+	elf_rel_set_symbol(&info->rhdr, "dt_offset",
+					&addr, sizeof(addr));
 
 #define PUL_STACK_SIZE	(16 * 1024)
-		addr = locate_hole(info, PUL_STACK_SIZE, 0, 0,
+	addr = locate_hole(info, PUL_STACK_SIZE, 0, 0,
 				elf_max_addr(&ehdr), 1);
-		addr += PUL_STACK_SIZE;
-		elf_rel_set_symbol(&info->rhdr, "stack", &addr, sizeof(addr));
+	addr += PUL_STACK_SIZE;
+	elf_rel_set_symbol(&info->rhdr, "stack", &addr, sizeof(addr));
 #undef PUL_STACK_SIZE
 
-		addr = elf_rel_get_addr(&info->rhdr, "purgatory_start");
-		info->entry = (void *)addr;
+	/*
+	 * Fixup ThreadPointer(r2) for purgatory.
+	 * PPC32 ELF ABI expects :
+	 * ThreadPointer (TP) = TCB + 0x7000
+	 * We manually allocate a TCB space and set the TP
+	 * accordingly.
+	 */
+#define TCB_SIZE 1024
+#define TCB_TP_OFFSET 0x7000	/* PPC32 ELF ABI */
 
-	} else { /*from fs2dt*/
+	addr = locate_hole(info, TCB_SIZE, 0, 0,
+				((unsigned long)elf_max_addr(&ehdr) - TCB_TP_OFFSET),
+				1);
+	addr += TCB_SIZE + TCB_TP_OFFSET;
+	elf_rel_set_symbol(&info->rhdr, "my_thread_ptr", &addr, sizeof(addr));
 
-		/* patch reserve map address for flattened device-tree
-		 * find last entry (both 0) in the reserve mem list.  Assume DT
-		 * entry is before this one
-		 */
-		bb_ptr = (struct bootblock *)(
-			(unsigned char *)info->segment[(info->nr_segments) -
-				1].buf);
-		rsvmap_ptr = (unsigned long long *)(
-			(unsigned char *)info->segment[(info->nr_segments) -
-				1].buf + bb_ptr->off_mem_rsvmap);
-		while (*rsvmap_ptr || *(rsvmap_ptr + 1))
-			rsvmap_ptr += 2;
-		rsvmap_ptr -= 2;
-		*rsvmap_ptr = (unsigned long)(
-				info->segment[(info->nr_segments)-1].mem);
-		rsvmap_ptr++;
-		*rsvmap_ptr = (unsigned long long)bb_ptr->totalsize;
+#undef TCB_SIZE
+#undef TCB_TP_OFFSET
 
-		nr_segments = info->nr_segments;
-
-		/* Set kernel */
-		my_kernel = (unsigned long)info->segment[0].mem;
-		elf_rel_set_symbol(&info->rhdr, "kernel", &my_kernel,
-				sizeof(my_kernel));
-
-		/* Set dt_offset */
-		my_dt_offset = (unsigned long)info->segment[nr_segments -
-			1].mem;
-		elf_rel_set_symbol(&info->rhdr, "dt_offset", &my_dt_offset,
-				sizeof(my_dt_offset));
-
-		/* get slave code from new kernel, put in purgatory */
-		elf_rel_get_symbol(&info->rhdr, "purgatory_start", slave_code,
-				sizeof(slave_code));
-		master_entry = slave_code[0];
-		memcpy(slave_code, info->segment[0].buf, sizeof(slave_code));
-		slave_code[0] = master_entry;
-		elf_rel_set_symbol(&info->rhdr, "purgatory_start", slave_code,
-				sizeof(slave_code));
-
-		/* Set stack address */
-		my_stack = locate_hole(info, 16*1024, 0, 0, max_addr, 1);
-		my_stack += 16*1024;
-		elf_rel_set_symbol(&info->rhdr, "stack", &my_stack,
-				sizeof(my_stack));
-	}
-
-	if (info->kexec_flags & KEXEC_ON_CRASH) {
-		/* Set backup address */
-		my_backup_start = info->backup_start;
-		elf_rel_set_symbol(&info->rhdr, "backup_start",
-				&my_backup_start, sizeof(my_backup_start));
-	}
+	addr = elf_rel_get_addr(&info->rhdr, "purgatory_start");
+	info->entry = (void *)addr;
 #endif
+
 	return 0;
 }

@@ -7,8 +7,8 @@ extern int get_xen_vmcoreinfo(uint64_t *addr, uint64_t *len);
 
 /* Need to find a better way to determine per cpu notes section size. */
 #define MAX_NOTE_BYTES		1024
-/* Expecting ELF headers to fit in 4K. Increase it if you need more. */
-#define KCORE_ELF_HEADERS_SIZE  4096
+/* Expecting ELF headers to fit in 32K. Increase it if you need more. */
+#define KCORE_ELF_HEADERS_SIZE  32768
 /* The address of the ELF header is passed to the secondary kernel
  * using the kernel command line option memmap=nnn.
  * The smallest unit the kernel accepts is in kilobytes,
@@ -23,14 +23,21 @@ struct crash_elf_info {
 	unsigned long data;
 	unsigned long machine;
 
-	unsigned long backup_src_start;
-	unsigned long backup_src_end;
-
 	unsigned long long page_offset;
+	unsigned long long kern_vaddr_start;
+	unsigned long long kern_paddr_start;
+	unsigned long kern_size;
 	unsigned long lowmem_limit;
 
 	int (*get_note_info)(int cpu, uint64_t *addr, uint64_t *len);
 };
+
+typedef int(*crash_create_elf_headers_func)(struct kexec_info *info,
+					    struct crash_elf_info *elf_info,
+					    struct memory_range *range,
+					    int ranges,
+					    void **buf, unsigned long *size,
+					    unsigned long align);
 
 int crash_create_elf32_headers(struct kexec_info *info,
 			       struct crash_elf_info *elf_info,

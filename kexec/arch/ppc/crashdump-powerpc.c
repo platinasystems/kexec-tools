@@ -21,8 +21,6 @@ static struct crash_elf_info elf_info64 = {
 class: ELFCLASS64,
 data: ELFDATA2MSB,
 machine: EM_PPC64,
-backup_src_start: BACKUP_SRC_START,
-backup_src_end: BACKUP_SRC_END,
 page_offset: PAGE_OFFSET,
 lowmem_limit: MAXMEM,
 };
@@ -35,8 +33,6 @@ machine: EM_PPC64,
 #else
 machine: EM_PPC,
 #endif
-backup_src_start: BACKUP_SRC_START,
-backup_src_end: BACKUP_SRC_END,
 page_offset: PAGE_OFFSET,
 lowmem_limit: MAXMEM,
 };
@@ -83,9 +79,8 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 	int memory_ranges = 0;
 	char device_tree[256] = "/proc/device-tree/";
 	char fname[256];
-	char buf[MAXBYTES-1];
 	DIR *dir, *dmem;
-	FILE *file;
+	int fd;
 	struct dirent *dentry, *mentry;
 	int i, n, crash_rng_len = 0;
 	unsigned long long start, end, cstart, cend;
@@ -100,11 +95,13 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 	}
 	memset(crash_memory_range, 0, crash_rng_len);
 
+#ifndef CONFIG_BOOKE
 	/* create a separate program header for the backup region */
 	crash_memory_range[0].start = BACKUP_SRC_START;
 	crash_memory_range[0].end = BACKUP_SRC_END + 1;
 	crash_memory_range[0].type = RANGE_RAM;
 	memory_ranges++;
+#endif
 
 	dir = opendir(device_tree);
 	if (!dir) {
@@ -127,17 +124,16 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 			if (strcmp(mentry->d_name, "reg"))
 				continue;
 			strcat(fname, "/reg");
-			file = fopen(fname, "r");
-			if (!file) {
+			fd = open(fname, O_RDONLY);
+			if (fd < 0) {
 				perror(fname);
 				closedir(dmem);
 				closedir(dir);
 				goto err;
 			}
-			n = fread(buf, 1, MAXBYTES, file);
-			if (n < 0) {
-				perror(fname);
-				fclose(file);
+			n = read_memory_region_limits(fd, &start, &end);
+			if (n != 0) {
+				close(fd);
 				closedir(dmem);
 				closedir(dir);
 				goto err;
@@ -149,27 +145,10 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 					" excedeed the max limit\n");
 				goto err;
 			}
-
-			/*
-			 * FIXME: This code fails on platforms that
-			 * have more than one memory range specified
-			 * in the device-tree's /memory/reg property.
-			 * or where the #address-cells and #size-cells
-			 * are not identical.
-			 *
-			 * We should interpret the /memory/reg property
-			 * based on the values of the #address-cells and
-			 * #size-cells properites.
-			 */
-			if (n == (sizeof(unsigned long) * 2)) {
-				start = ((unsigned long *)buf)[0];
-				end = start + ((unsigned long *)buf)[1];
-			} else {
-				start = ((unsigned long long *)buf)[0];
-				end = start + ((unsigned long long *)buf)[1];
-			}
+#ifndef CONFIG_BOOKE
 			if (start == 0 && end >= (BACKUP_SRC_END + 1))
 				start = BACKUP_SRC_END + 1;
+#endif
 
 			cstart = crash_base;
 			cend = crash_base + crash_size;
@@ -216,7 +195,7 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 					= RANGE_RAM;
 				memory_ranges++;
 			}
-			fclose(file);
+			close(fd);
 		}
 		closedir(dmem);
 	}
@@ -332,6 +311,9 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 	if (get_crash_memory_ranges(&mem_range, &nr_ranges) < 0)
 		return -1;
 
+	info->backup_src_start = BACKUP_SRC_START;
+	info->backup_src_size = BACKUP_SRC_SIZE;
+#ifndef CONFIG_BOOKE
 	/* Create a backup region segment to store backup data*/
 	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
 	tmp = xmalloc(sz);
@@ -339,6 +321,7 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 	info->backup_start = add_buffer(info, tmp, sz, sz, align,
 					0, max_addr, 1);
 	reserve(info->backup_start, sz);
+#endif
 
 	/* On powerpc memory ranges in device-tree is denoted as start
 	 * and size rather than start and end, as is the case with

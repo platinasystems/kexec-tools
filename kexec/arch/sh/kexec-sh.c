@@ -185,13 +185,60 @@ void kexec_sh_setup_zero_page(char *zero_page_buf, size_t zero_page_size,
 	}
 }
 
+static int is_32bit(void)
+{
+	const char *cpuinfo = "/proc/cpuinfo";
+	char line[MAX_LINE];
+	FILE *fp;
+	int status = 0;
+
+	fp = fopen(cpuinfo, "r");
+	if (!fp)
+		die("Cannot open %s\n", cpuinfo);
+
+	while(fgets(line, sizeof(line), fp) != 0) {
+		const char *key = "address sizes";
+		const char *value = " 32 bits physical";
+		char *p;
+		if (strncmp(line, key, strlen(key)))
+			continue;
+		p = strchr(line + strlen(key), ':');
+		if (!p)
+			continue;
+		if (!strncmp(p + 1, value, strlen(value)))
+			status = 1;
+		break;
+	}
+
+	fclose(fp);
+
+	return status;
+}
+
 unsigned long virt_to_phys(unsigned long addr)
 {
 	unsigned long seg = addr & 0xe0000000;
-	if (seg != 0x80000000 && seg != 0xc0000000)
-		die("Virtual address %p is not in P1 or P2\n", (void *)addr);
+	unsigned long long start = 0;
+	int have_32bit = is_32bit();
 
-	return addr - seg;
+	if (seg != 0x80000000 && (have_32bit || seg != 0xc0000000))
+		die("Virtual address %p is not in P1%s\n", (void *)addr,
+		    have_32bit ? "" : " or P2");
+
+	/* If 32bit addressing is used then the base of system RAM
+	 * is an offset into physical memory. */
+	if (have_32bit) {
+		unsigned long long end;
+		int ret;
+
+		/* Assume there is only one "System RAM" region */
+		ret = parse_iomem_single("System RAM\n", &start, &end);
+		if (ret)
+			die("Could not parse System RAM region "
+			    "in /proc/iomem\n");
+	}
+
+	return addr - seg + start;
 }
 
 /*

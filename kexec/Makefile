@@ -22,6 +22,7 @@ KEXEC_SRCS += kexec/firmware_memmap.c
 KEXEC_SRCS += kexec/crashdump.c
 KEXEC_SRCS += kexec/crashdump-xen.c
 KEXEC_SRCS += kexec/phys_arch.c
+KEXEC_SRCS += kexec/kernel_version.c
 KEXEC_SRCS += kexec/lzma.c
 KEXEC_SRCS += kexec/zlib.c
 
@@ -47,8 +48,6 @@ $(ARCH)_ADD_BUFFER		= kexec/add_buffer.c
 KEXEC_SRCS += $($(ARCH)_ADD_BUFFER)
 $(ARCH)_ARCH_REUSE_INITRD	= kexec/arch_reuse_initrd.c
 KEXEC_SRCS += $($(ARCH)_ARCH_REUSE_INITRD)
-$(ARCH)_ARCH_INIT		= kexec/arch_init.c
-KEXEC_SRCS += $($(ARCH)_ARCH_INIT)
 
 include $(srcdir)/kexec/arch/alpha/Makefile
 include $(srcdir)/kexec/arch/arm/Makefile
@@ -77,7 +76,7 @@ KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
 
 $(KEXEC): $(KEXEC_OBJS) $(UTIL_LIB)
 	@$(MKDIR) -p $(@D)
-	$(LINK.o) -o $@ $^ $(LIBS)
+	$(LINK.o) -o $@ $^ $(CFLAGS) $(LIBS)
 
 $(KEXEC): CPPFLAGS+=-I$(srcdir)/kexec/arch/$(ARCH)/include
 

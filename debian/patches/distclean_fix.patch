@@ -1,0 +1,13 @@
+Index: kexec-tools-2.0.3/Makefile.in
+===================================================================
+--- kexec-tools-2.0.3.orig/Makefile.in	2012-01-31 08:07:36.007492898 -0700
++++ kexec-tools-2.0.3/Makefile.in	2012-01-31 08:46:37.138038550 -0700
+@@ -228,7 +228,7 @@
+ distclean: dist-clean
+ 
+ dist-clean: clean
+-	$(RM) -f config.log config.status config.cache Makefile include/config.h
++	$(RM) -f config.log config.status config.cache Makefile include/config.h include/stamp-h*
+ 	$(RM) -f include/config.h.in configure $(SPEC)
+ 	$(RM) -rf autom4te.cache
+ 

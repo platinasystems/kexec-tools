@@ -29,7 +29,7 @@
 #include "../../kexec-elf.h"
 #include "../../kexec-syscall.h"
 #include "kexec-x86_64.h"
-#include "crashdump-x86_64.h"
+#include "../i386/crashdump-x86.h"
 #include <arch/options.h>
 
 struct file_type file_type[] = {
@@ -55,14 +55,7 @@ void arch_usage(void)
 		);
 }
 
-static struct {
-	uint8_t  reset_vga;
-	uint16_t serial_base;
-	uint32_t serial_baud;
-	uint8_t  console_vga;
-	uint8_t  console_serial;
-	int core_header_type;
-} arch_options = {
+struct arch_options_t arch_options = {
 	.reset_vga   = 0,
 	.serial_base = 0x3f8,
 	.serial_baud = 0,
@@ -141,10 +134,7 @@ int arch_process_options(int argc, char **argv)
 }
 
 const struct arch_map_entry arches[] = {
-	/* For compatibility with older patches
-	 * use KEXEC_ARCH_DEFAULT instead of KEXEC_ARCH_X86_64 here.
-	 */
-	{ "x86_64", KEXEC_ARCH_DEFAULT },
+	{ "x86_64", KEXEC_ARCH_X86_64 },
 	{ NULL, 0 },
 };
 
@@ -167,6 +157,10 @@ void arch_update_purgatory(struct kexec_info *info)
 		&arch_options.console_vga, sizeof(arch_options.console_vga));
 	elf_rel_set_symbol(&info->rhdr, "console_serial",
 		&arch_options.console_serial, sizeof(arch_options.console_serial));
+	elf_rel_set_symbol(&info->rhdr, "backup_src_start",
+		&info->backup_src_start, sizeof(info->backup_src_start));
+	elf_rel_set_symbol(&info->rhdr, "backup_src_size",
+		&info->backup_src_size, sizeof(info->backup_src_size));
 
 	if (info->kexec_flags & KEXEC_ON_CRASH) {
 		panic_kernel = 1;

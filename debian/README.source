@@ -1,3 +1,0 @@
-This package uses dpatch to maintain patches to upstream sources. Please 
-refer to /usr/share/doc/dpatch/README.source.gz for details on how to
-build modified sources.

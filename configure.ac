@@ -1,10 +1,10 @@
 dnl 
-dnl configure.ac for mkelfImage
+dnl configure.ac for kexec-tools
 dnl 
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.2)
+AC_INIT(kexec-tools, 2.0.3)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
@@ -85,6 +85,11 @@ AC_ARG_WITH([lzma], AC_HELP_STRING([--without-lzma],[disable lzma support]),
 AC_ARG_WITH([xen], AC_HELP_STRING([--without-xen],
 	[disable extended xen support]), [ with_xen="$withval"], [ with_xen=yes ] )
 
+AC_ARG_WITH([booke],
+		AC_HELP_STRING([--with-booke],[build for booke]),
+		AC_DEFINE(CONFIG_BOOKE,1,
+			[Define to build for BookE]))
+
 dnl ---Programs
 dnl To specify a different compiler, just 'export CC=/path/to/compiler'
 
@@ -157,15 +162,9 @@ if test "$with_xen" = yes ; then
 	AC_CHECK_HEADER(xenctrl.h,
 		AC_CHECK_LIB(xenctrl, xc_version, ,
 		AC_MSG_NOTICE([Xen support disabled])))
-fi
-
-dnl new toolchains
-if test "$ARCH" = ppc; then
-AC_ARG_WITH([oldtoolchain],
-		AC_HELP_STRING([--with-oldtoolchain],[compile without crt.S
-			required for new toolchains]),
-		AC_DEFINE(PPC_OLDTOOLCHAIN, 1,
-			[Define to compile with old toolchains]))
+	if test "$ac_cv_lib_xenctrl_xc_version" = yes ; then
+		AC_CHECK_FUNCS(xc_get_machine_memory_map)
+	fi
 fi
 
 dnl ---Sanity checks
