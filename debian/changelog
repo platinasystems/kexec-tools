@@ -1,10 +1,15 @@
-kexec-tools (1:2.0.3-1+deb7u1) stable; urgency=low
+kexec-tools (1:2.0.3-2) unstable; urgency=low
 
-  * Fixed the "kexec -p" failure with kernel versions of the form 
-    x.y. This is the same bug as Bug#708034 that was fixed in jessie.
-    (closes: Bug#722285)
+  * Changed the default for kexec to not be enabled, and changed the 
+    priority of debconf question for enabling kexec by default to
+    high (closes: Bug#638261)
+  * Handle the case of a separate /boot partition (closes: Bug#687956)
+  * Updated to use hardening rules
+  * Added full path to the calls to kexec in init scripts to make sure 
+    it works reliably.
+  * Added code to clear screen before rebooting (closes: Bug#606955)
 
- -- Khalid Aziz <khalid@debian.org>  Tue, 10 Dec 2013 10:13:58 -0700
+ -- Khalid Aziz <khalid@debian.org>  Sun, 13 Jan 2013 19:39:31 -0700
 
 kexec-tools (1:2.0.3-1) unstable; urgency=low
 

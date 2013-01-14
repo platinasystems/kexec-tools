@@ -21,7 +21,9 @@ do_stop () {
 	test -x /sbin/kexec || exit 0
 
 	log_action_msg "Will now restart with kexec"
-        kexec -e
+	# Clear the screen if possible
+	echo "\033[;H\033[2J]"
+        /sbin/kexec -e
         log_failure_msg "kexec failed"
 }
 

@@ -22,11 +22,11 @@ process_grub_entry() {
 	while read command args; do
 		if [ "$command" = "linux" ]; then
 			echo "$args" | while read kernel append; do
-			echo KERNEL_IMAGE=\"${kernel}\"
+			echo KERNEL_IMAGE=\"${prefix}${kernel}\"
 			echo APPEND=\"${append}\"
 			done
 		elif [ "$command" = "initrd" ]; then
-			initrd_image=${args}
+			initrd_image=${prefix}${args}
 		fi
 	done
 	echo INITRD=\"$initrd_image\"
@@ -34,6 +34,8 @@ process_grub_entry() {
 
 get_grub_kernel() {
 	test -f /boot/grub/grub.cfg || return
+	local prefix
+	mountpoint -q /boot && prefix=/boot || prefix=
 	data=$(cat /boot/grub/grub.cfg)
 
 	default=$(echo "$data" | awk '/^set default/ {print $2}' | cut -d'"' -f2)
@@ -80,9 +82,9 @@ do_stop () {
 	log_action_begin_msg "Loading new kernel image into memory"
 	if [ -z "$INITRD" ]
 	then
-		kexec -l "$KERNEL_IMAGE" --append="$REAL_APPEND"
+		/sbin/kexec -l "$KERNEL_IMAGE" --append="$REAL_APPEND"
 	else
-		kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$REAL_APPEND"
+		/sbin/kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$REAL_APPEND"
 	fi
 	log_action_end_msg $?
 }

@@ -6,4 +6,4 @@ update_kexec_manpage.patch
 add_debian_readme.patch
 coldreboot.patch
 linker-option.patch
-kexec-p-fails-to-load-kernels-with-version-x.y.patch
+kdump_makefile.patch

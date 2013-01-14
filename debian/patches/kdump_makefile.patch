@@ -1,0 +1,13 @@
+Index: kexec-tools-2.0.3/kdump/Makefile
+===================================================================
+--- kexec-tools-2.0.3/kdump/Makefile	2010-07-29 03:22:16.000000000 -0600
++++ tmp/kdump/Makefile	2013-01-12 14:33:42.000000000 -0700
+@@ -18,7 +18,7 @@ clean += $(KDUMP_OBJS) $(KDUMP_DEPS) $(K
+ $(KDUMP): CC=$(TARGET_CC)
+ $(KDUMP): $(KDUMP_OBJS)
+ 	@$(MKDIR) -p $(@D)
+-	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(KDUMP_OBJS)
++	$(LINK.o) $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $(KDUMP_OBJS)
+ 
+ $(KDUMP_MANPAGE): kdump/kdump.8
+ 	$(MKDIR) -p     $(MANDIR)/man8
