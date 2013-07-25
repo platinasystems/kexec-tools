@@ -1,3 +1,17 @@
+kexec-tools (1:2.0.3-3) unstable; urgency=low
+
+  * Fixed kexec-load init script to parse newer grub.cfg files correctly
+    (closes: Bug#714016)
+  * Replaced echo in kexec init script with printf to avoid bashism
+    (closes: Bug#701551)
+  * Fixed the "kexec -p" failure with kernel versions of the form x.y
+    (closes: Bug#708034)
+  * Updated japanese translation (Thank you Victory and Japanese Debian 
+    Developers) (closes: Bug#717206)
+  * Added mips and mipsel to supported architectures (closes: Bug#711274)
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 25 Jul 2013 13:57:30 -0600
+
 kexec-tools (1:2.0.3-2) unstable; urgency=low
 
   * Changed the default for kexec to not be enabled, and changed the 

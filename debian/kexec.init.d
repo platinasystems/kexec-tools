@@ -22,7 +22,7 @@ do_stop () {
 
 	log_action_msg "Will now restart with kexec"
 	# Clear the screen if possible
-	echo "\033[;H\033[2J]"
+	printf "\033[;H\033[2J"
         /sbin/kexec -e
         log_failure_msg "kexec failed"
 }

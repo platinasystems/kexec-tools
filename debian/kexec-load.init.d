@@ -47,7 +47,7 @@ get_grub_kernel() {
 
 	# grub entries start with "menuentry" commands.  Get the line 
 	# numbers that surround the first entry
-	offsets=$(echo "$data" | grep -n ^menuentry | cut -d: -f1)
+	offsets=$(echo "$data" | grep -n '^[[:space:]]*menuentry[[:space:]]' | cut -d: -f1)
 	begin=$(echo "$offsets" | tail -n+$start_offset | head -n1)
 	end=$(echo "$offsets" | tail -n+$end_offset | head -n1)
 

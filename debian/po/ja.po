@@ -7,7 +7,7 @@ msgstr ""
 "Project-Id-Version: kexec-tools 20080324-2\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
 "POT-Creation-Date: 2011-08-25 18:55+0200\n"
-"PO-Revision-Date: 2008-12-28 22:26+0900\n"
+"PO-Revision-Date: 2011-08-26 01:55+0900\n"
 "Last-Translator: Hideki Yamane (Debian-JP) <henrich@debian.or.jp>\n"
 "Language-Team: Japanese <debian-japanese@lists.debian.org>\n"
 "Language: ja\n"
@@ -19,16 +19,11 @@ msgstr ""
 #. Description
 #: ../kexec-tools.templates:2001
 msgid "Should kexec-tools handle reboots?"
-msgstr "kexec-tools で再起動をハンドルしますか?"
+msgstr "kexec-tools で再起動処理を行いますか?"
 
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-#, fuzzy
-#| msgid ""
-#| "If you choose this option, a system reboot will trigger a restart into a "
-#| "kernel loaded by kexec instead of going through the full system "
-#| "bootloader process."
 msgid ""
 "If you choose this option, a system reboot will trigger a restart into a "
 "kernel loaded by kexec instead of going through the full system boot loader "
@@ -42,7 +37,7 @@ msgstr ""
 #. Description
 #: ../kexec-tools.templates:3001
 msgid "Read GRUB configuration file to load the kernel?"
-msgstr ""
+msgstr "カーネルをロードするための GRUB 設定ファイルを読み込みますか?"
 
 #. Type: boolean
 #. Description
@@ -52,3 +47,6 @@ msgid ""
 "determine which kernel and options to load for kexec reboot, as opposed to "
 "what is in /etc/default/kexec."
 msgstr ""
+"このオプションを選択すると kexec は /etc/default/kexec の内容ではなく GRUB 設"
+"定ファイルを読み込んで kexec の再起動時にどのカーネル及びオプションをロードす"
+"るか判断します。"
