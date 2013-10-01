@@ -8,7 +8,7 @@ Standards-Version: 3.9.4
 
 Package: kexec-tools
 Architecture: i386 amd64 ppc64 powerpc ia64 s390 arm armel armhf sh4 mips mipsel
-Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, grub2-common (>= 2.00)
+Depends: ${shlibs:Depends}, ${misc:Depends}, debconf
 Description: tools to support fast kexec reboots
  This package provides tools to load a kernel into memory and then
  "reboot" directly into that kernel using the kexec system call,
@@ -18,5 +18,5 @@ Package: kexec-tools-udeb
 Section: debian-installer
 Architecture: i386 amd64 ppc64 powerpc ia64 s390 arm armel armhf sh4 mips mipsel
 XC-Package-Type: udeb
-Depends: ${misc:Depends}, ${shlibs:Depends}, grub2-common (>= 2.00)
+Depends: ${misc:Depends}, ${shlibs:Depends}
 Description: tools to support fast kexec reboots (udeb)
