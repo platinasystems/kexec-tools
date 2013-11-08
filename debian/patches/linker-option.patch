@@ -1,13 +1,11 @@
-Index: kexec-tools-2.0.3/purgatory/Makefile
-===================================================================
---- kexec-tools-2.0.3.orig/purgatory/Makefile	2012-01-31 08:55:40.858142580 -0700
-+++ kexec-tools-2.0.3/purgatory/Makefile	2012-01-31 08:55:57.070203049 -0700
-@@ -63,7 +63,7 @@
+--- a/purgatory/Makefile
++++ b/purgatory/Makefile
+@@ -63,7 +63,7 @@ $(PURGATORY): $(PURGATORY_OBJS)
  	$(MKDIR) -p $(@D)
  	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
  
 -#	$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) --no-undefined -e purgatory_start -r -o $@ $(PURGATORY_OBJS) $(UTIL_LIB)
 +#	$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) -Wl,--no-undefined -e purgatory_start -r -o $@ $(PURGATORY_OBJS) $(UTIL_LIB)
+ 	$(STRIP) --strip-debug $@
  
  echo::
- 	@echo "PURGATORY_SRCS $(PURGATORY_SRCS)"

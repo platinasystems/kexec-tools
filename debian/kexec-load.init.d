@@ -39,6 +39,9 @@ get_grub_kernel() {
 	data=$(cat /boot/grub/grub.cfg)
 
 	default=$(echo "$data" | awk '/^set default/ {print $2}' | cut -d'"' -f2)
+	if [ "$default" = '${saved_entry}' ]; then 
+		default=$(sed -ne 's/^saved_entry=//p' /boot/grub/grubenv)
+	fi
 	if [ -z "$default" ]; then
 		default=0
 	fi

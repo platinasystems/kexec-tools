@@ -1,8 +1,6 @@
-Index: kexec-tools-2.0.3/Makefile.in
-===================================================================
---- kexec-tools-2.0.3.orig/Makefile.in	2012-01-31 08:07:36.007492898 -0700
-+++ kexec-tools-2.0.3/Makefile.in	2012-01-31 08:46:37.138038550 -0700
-@@ -228,7 +228,7 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -230,7 +230,7 @@ clean:
  distclean: dist-clean
  
  dist-clean: clean

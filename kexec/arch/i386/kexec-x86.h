@@ -70,7 +70,7 @@ int do_bzImage_load(struct kexec_info *info,
 	const char *kernel, off_t kernel_len,
 	const char *command_line, off_t command_line_len,
 	const char *initrd, off_t initrd_len,
-	int real_mode_entry, int debug);
+	int real_mode_entry);
 
 int beoboot_probe(const char *buf, off_t len);
 int beoboot_load(int argc, char **argv, const char *buf, off_t len,
@@ -81,4 +81,6 @@ int nbi_probe(const char *buf, off_t len);
 int nbi_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info);
 void nbi_usage(void);
+
+extern unsigned xen_e820_to_kexec_type(uint32_t type);
 #endif /* KEXEC_X86_H */

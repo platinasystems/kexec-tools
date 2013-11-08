@@ -29,6 +29,7 @@
 
 unsigned long dt_address_cells = 0, dt_size_cells = 0;
 uint64_t rmo_top;
+uint64_t memory_limit;
 unsigned long long crash_base = 0, crash_size = 0;
 unsigned long long initrd_base = 0, initrd_size = 0;
 unsigned long long ramdisk_base = 0, ramdisk_size = 0;
@@ -378,10 +379,48 @@ static int get_base_ranges(void)
 	nr_memory_ranges = local_memory_ranges;
 	sort_base_ranges();
 	memory_max = base_memory_range[nr_memory_ranges - 1].end;
-#ifdef DEBUG
-	fprintf(stderr, "get base memory ranges:%d\n", nr_memory_ranges);
-#endif
+
+	dbgprintf("get base memory ranges:%d\n", nr_memory_ranges);
+
 	return 0;
+}
+
+static int read_kernel_memory_limit(char *fname, char *buf)
+{
+	FILE *file;
+	int n;
+
+	if (!fname || !buf)
+		return -1;
+
+	file = fopen(fname, "r");
+	if (file == NULL) {
+		if (errno != ENOENT) {
+			perror(fname);
+			return -1;
+		}
+		errno = 0;
+		/*
+		 * fall through. On older kernel this file
+		 * is not present. Hence return success.
+		 */
+	} else {
+		/* Memory limit property is of u64 type. */
+		if ((n = fread(&memory_limit, 1, sizeof(uint64_t), file)) < 0) {
+			perror(fname);
+			goto err_out;
+		}
+		if (n != sizeof(uint64_t)) {
+			fprintf(stderr, "%s node has invalid size: %d\n",
+						fname, n);
+			goto err_out;
+		}
+		fclose(file);
+	}
+	return 0;
+err_out:
+	fclose(file);
+	return -1;
 }
 
 /* Get devtree details and create exclude_range array
@@ -511,6 +550,18 @@ static int get_devtree_details(unsigned long kexec_flags)
 				add_usable_mem_rgns(crash_base, crash_size);
 #endif
 			}
+			/*
+			 * Read the first kernel's memory limit.
+			 * If the first kernel is booted with mem= option then
+			 * it would export "linux,memory-limit" file
+			 * reflecting value for the same.
+			 */
+			memset(fname, 0, sizeof(fname));
+			snprintf(fname, sizeof(fname), "%s%s%s", device_tree,
+				dentry->d_name, "/linux,memory-limit");
+			if (read_kernel_memory_limit(fname, buf) < 0)
+				goto error_opencdir;
+
 			/* reserve the initrd_start and end locations. */
 			memset(fname, 0, sizeof(fname));
 			sprintf(fname, "%s%s%s",
@@ -716,13 +767,13 @@ static int get_devtree_details(unsigned long kexec_flags)
 
 	sort_ranges();
 
-#ifdef DEBUG
+
 	int k;
 	for (k = 0; k < i; k++)
-		fprintf(stderr, "exclude_range sorted exclude_range[%d] "
+		dbgprintf("exclude_range sorted exclude_range[%d] "
 			"start:%llx, end:%llx\n", k, exclude_range[k].start,
 			exclude_range[k].end);
-#endif
+
 	return 0;
 
 error_openfile:
@@ -812,13 +863,12 @@ static int setup_memory_ranges(unsigned long kexec_flags)
 	} else
 		nr_memory_ranges = j;
 
-#ifdef DEBUG
+
 	int k;
 	for (k = 0; k < j; k++)
-		fprintf(stderr, "setup_memory_ranges memory_range[%d] "
+		dbgprintf("setup_memory_ranges memory_range[%d] "
 				"start:%llx, end:%llx\n", k, memory_range[k].start,
 				memory_range[k].end);
-#endif
 	return 0;
 
 out:

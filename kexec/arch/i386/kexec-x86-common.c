@@ -88,10 +88,9 @@ static int get_memory_ranges_proc_iomem(struct memory_range **range, int *ranges
 			continue;
 		str = line + consumed;
 		end = end + 1;
-#if 0
-		printf("%016Lx-%016Lx : %s",
-			start, end, str);
-#endif
+
+		dbgprintf("%016Lx-%016Lx : %s", start, end, str);
+
 		if (memcmp(str, "System RAM\n", 11) == 0) {
 			type = RANGE_RAM;
 		}
@@ -110,10 +109,9 @@ static int get_memory_ranges_proc_iomem(struct memory_range **range, int *ranges
 		memory_range[memory_ranges].start = start;
 		memory_range[memory_ranges].end = end;
 		memory_range[memory_ranges].type = type;
-#if 0
-		printf("%016Lx-%016Lx : %x\n",
-			start, end, type);
-#endif
+
+		dbgprintf("%016Lx-%016Lx : %x\n", start, end, type);
+
 		memory_ranges++;
 	}
 	fclose(fp);
@@ -151,7 +149,7 @@ static int get_memory_ranges_sysfs(struct memory_range **range, int *ranges)
 }
 
 #ifdef HAVE_LIBXENCTRL
-static unsigned e820_to_kexec_type(uint32_t type)
+unsigned xen_e820_to_kexec_type(uint32_t type)
 {
 	switch (type) {
 		case E820_RAM:
@@ -213,7 +211,7 @@ static int get_memory_ranges_xen(struct memory_range **range, int *ranges)
 	for (i = 0; i < rc; ++i) {
 		memory_range[i].start = e820entries[i].addr;
 		memory_range[i].end = e820entries[i].addr + e820entries[i].size;
-		memory_range[i].type = e820_to_kexec_type(e820entries[i].type);
+		memory_range[i].type = xen_e820_to_kexec_type(e820entries[i].type);
 	}
 
 	qsort(memory_range, rc, sizeof(struct memory_range), compare_ranges);
@@ -289,7 +287,7 @@ static int get_memory_ranges_xen(struct memory_range **range, int *ranges)
 	for (i = 0; i < xen_memory_map->nr_entries; ++i) {
 		memory_range[i].start = e820entries[i].addr;
 		memory_range[i].end = e820entries[i].addr + e820entries[i].size;
-		memory_range[i].type = e820_to_kexec_type(e820entries[i].type);
+		memory_range[i].type = xen_e820_to_kexec_type(e820entries[i].type);
 	}
 
 	qsort(memory_range, xen_memory_map->nr_entries, sizeof(struct memory_range), compare_ranges);
@@ -479,17 +477,11 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 			mem_max = end;
 	}
 
-	/* just set 0 to 1 to enable printing for debugging */
-#if 0
-	{
-		int i;
-		printf("MEMORY RANGES\n");
-		for (i = 0; i < *ranges; i++) {
-			printf("%016Lx-%016Lx (%d)\n", (*range)[i].start,
-				(*range)[i].end, (*range)[i].type);
-		}
+	dbgprintf("MEMORY RANGES\n");
+	for (i = 0; i < *ranges; i++) {
+		dbgprintf("%016Lx-%016Lx (%d)\n", (*range)[i].start,
+			  (*range)[i].end, (*range)[i].type);
 	}
-#endif
 
 	return ret;
 }

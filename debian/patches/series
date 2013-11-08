@@ -1,8 +1,6 @@
 debianize.patch
-crashdump_warning.patch
 static_binary_warning.patch
 distclean_fix.patch
-update_kexec_manpage.patch
 add_debian_readme.patch
 coldreboot.patch
 linker-option.patch

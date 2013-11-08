@@ -1,14 +1,12 @@
-Index: kexec-tools-2.0.3/Makefile.in
-===================================================================
---- kexec-tools-2.0.3.orig/Makefile.in	2012-01-31 09:01:44.470355831 -0700
-+++ kexec-tools-2.0.3/Makefile.in	2012-01-31 09:01:44.504360151 -0700
-@@ -176,11 +176,13 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -177,11 +177,13 @@ PSRCS:=$(foreach s, $(SRCS), $(PACKAGE_N
  PGSRCS:=$(foreach s, $(GENERATED_SRCS), $(PACKAGE_NAME)-$(PACKAGE_VERSION)/$(s))
  
  MAN_PAGES:=$(KEXEC_MANPAGE) $(KDUMP_MANPAGE) $(VMCORE_DMESG_MANPAGE)
 +MAN_PAGES+= $(MANDIR)/man8/coldreboot.8
- BINARIES_i386:=$(KEXEC_TEST) $(KEXEC_TEST)
- BINARIES_x86_64:=$(KEXEC) $(KDUMP) $(BINARIES_$(ARCH))
+ BINARIES_i386:=$(KEXEC_TEST)
+ BINARIES_x86_64:=$(KEXEC_TEST)
  BINARIES:=$(KEXEC) $(KDUMP) $(VMCORE_DMESG) $(BINARIES_$(ARCH))
 +SCRIPTS:=$(SBINDIR)/coldreboot
  
@@ -17,11 +15,9 @@ Index: kexec-tools-2.0.3/Makefile.in
  
  targets: $(TARGETS)
  
-Index: kexec-tools-2.0.3/kexec/Makefile
-===================================================================
---- kexec-tools-2.0.3.orig/kexec/Makefile	2012-01-31 08:58:55.000000000 -0700
-+++ kexec-tools-2.0.3/kexec/Makefile	2012-01-31 09:01:44.504360151 -0700
-@@ -71,6 +71,8 @@
+--- a/kexec/Makefile
++++ b/kexec/Makefile
+@@ -90,6 +90,8 @@ clean += $(KEXEC_OBJS) $(KEXEC_DEPS) $(K
  
  KEXEC = $(SBINDIR)/kexec
  KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
@@ -30,10 +26,10 @@ Index: kexec-tools-2.0.3/kexec/Makefile
  
  -include $(KEXEC_DEPS)
  
-@@ -83,6 +85,16 @@
+@@ -104,6 +106,16 @@ kexec/fs2dt.o: CPPFLAGS+=$($(ARCH)_FS2DT
  $(KEXEC_MANPAGE): kexec/kexec.8
  	@$(MKDIR) -p     $(MANDIR)/man8
- 	cp kexec/kexec.8 $(KEXEC_MANPAGE)
+ 	cp $^ $(KEXEC_MANPAGE)
 +
 +$(KEXEC_COLDREBOOT): kexec/coldreboot
 +	@$(MKDIR) -p     $(@D)
@@ -47,10 +43,8 @@ Index: kexec-tools-2.0.3/kexec/Makefile
  echo::
  	@echo "KEXEC_SRCS $(KEXEC_SRCS)"
  	@echo "KEXEC_DEPS $(KEXEC_DEPS)"
-Index: kexec-tools-2.0.3/kexec/coldreboot
-===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ kexec-tools-2.0.3/kexec/coldreboot	2012-01-31 09:01:44.505360279 -0700
+--- /dev/null
++++ b/kexec/coldreboot
 @@ -0,0 +1,6 @@
 +#!/bin/sh
 +NOKEXECFILE=/tmp/no-kexec-reboot
@@ -58,10 +52,8 @@ Index: kexec-tools-2.0.3/kexec/coldreboot
 +/bin/rm -f $NOKEXECFILE
 +touch $NOKEXECFILE
 +/sbin/reboot $*
-Index: kexec-tools-2.0.3/kexec/coldreboot.8
-===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ kexec-tools-2.0.3/kexec/coldreboot.8	2012-01-31 09:02:44.930039936 -0700
+--- /dev/null
++++ b/kexec/coldreboot.8
 @@ -0,0 +1,25 @@
 +.\" Process this file with
 +.\" groff -man -Tascii coldreboot.8

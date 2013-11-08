@@ -1,8 +1,6 @@
-Index: kexec-tools-2.0.3/Makefile.in
-===================================================================
---- kexec-tools-2.0.3.orig/Makefile.in	2012-01-31 08:07:28.146493804 -0700
-+++ kexec-tools-2.0.3/Makefile.in	2012-01-31 08:07:36.007492898 -0700
-@@ -89,7 +89,7 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -90,7 +90,7 @@ SHAREDSTATEDIR=$(BUILD_PREFIX)/com
  LOCALSTATEDIR=$(BUILD_PREFIX)/var
  LIBDIR=$(BUILD_PREFIX)/lib
  INFODIR=$(BUILD_PREFIX)/info

@@ -1,3 +1,15 @@
+kexec-tools (1:2.0.4-1) unstable; urgency=low
+
+  * New upstream release
+  * Removed crashdump_warning.patch since it is in upstream now
+  * Removed update_kexec_manpage.patch since it is in upstream now
+  * Updated watch file to look for more extensions that tgz and tar.gz, as 
+    suggested by someone on PTS
+  * Added support for parallel make (closes: Bug#727130)
+  * Added support for grub2's saved_entry (closes: Bug#699007)
+
+ -- Khalid Aziz <khalid@debian.org>  Fri, 08 Nov 2013 16:38:16 -0700
+
 kexec-tools (1:2.0.3-4) unstable; urgency=low
 
   * Drop the dependency on grub2 which is not quite right 

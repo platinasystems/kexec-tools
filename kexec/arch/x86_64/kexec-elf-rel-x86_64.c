@@ -60,9 +60,7 @@ static const char *reloc_name(unsigned long r_type)
 void machine_apply_elf_rel(struct mem_ehdr *UNUSED(ehdr), unsigned long r_type,
 	void *location, unsigned long address, unsigned long value)
 {
-#ifdef DEBUG
-	fprintf(stderr, "%s\n", reloc_name(r_type));
-#endif
+	dbgprintf("%s\n", reloc_name(r_type));
 	switch(r_type) {
 	case R_X86_64_NONE:
 		break;
@@ -88,6 +86,6 @@ void machine_apply_elf_rel(struct mem_ehdr *UNUSED(ehdr), unsigned long r_type,
 	}
 	return;
  overflow:
-	die("overflow in relocation type %s val %Lx\n", 
+	die("overflow in relocation type %s val %lx\n",
 		reloc_name(r_type), value);
 }

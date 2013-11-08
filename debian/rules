@@ -10,6 +10,9 @@
 #export DH_VERBOSE=1
 
 
+ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+	NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
+endif
 
 CFLAGS = -Wall -g
 
@@ -38,7 +41,7 @@ build-stamp: configure-stamp
 	dh_testdir
 
 	# Add here commands to compile the package.
-	$(MAKE)
+	$(MAKE) $(NJOBS)
 
 	touch build-stamp
 
