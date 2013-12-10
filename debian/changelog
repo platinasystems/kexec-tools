@@ -1,3 +1,11 @@
+kexec-tools (1:2.0.3-1+deb7u1) stable; urgency=low
+
+  * Fixed the "kexec -p" failure with kernel versions of the form 
+    x.y. This is the same bug as Bug#708034 that was fixed in jessie.
+    (closes: Bug#722285)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 10 Dec 2013 10:13:58 -0700
+
 kexec-tools (1:2.0.3-1) unstable; urgency=low
 
   * New upstream release
