@@ -84,8 +84,8 @@ binary-arch: build install
 	dh_installchangelogs 
 	dh_installdocs
 	dh_installdebconf
-	dh_installinit --no-start -r --name=kexec -- start 85 6 .
-	dh_installinit --no-start -r --name=kexec-load -- stop 18 6 .
+	dh_installinit --no-start -r --name=kexec 
+	dh_installinit --no-start -r --name=kexec-load
 	dh_installexamples
 	dh_lintian
 	dh_install

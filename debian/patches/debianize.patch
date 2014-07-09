@@ -1,6 +1,6 @@
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -90,7 +90,7 @@ SHAREDSTATEDIR=$(BUILD_PREFIX)/com
+@@ -91,7 +91,7 @@ SHAREDSTATEDIR=$(BUILD_PREFIX)/com
  LOCALSTATEDIR=$(BUILD_PREFIX)/var
  LIBDIR=$(BUILD_PREFIX)/lib
  INFODIR=$(BUILD_PREFIX)/info

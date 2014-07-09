@@ -336,7 +336,7 @@ int elf_rel_load(struct mem_ehdr *ehdr, struct kexec_info *info,
 		}
 		rel_end = shdr->sh_data + shdr->sh_size;
 		for(ptr = shdr->sh_data; ptr < rel_end; ptr += rel_size) {
-			struct mem_rela rel;
+			struct mem_rela rel = {0};
 			struct mem_sym sym;
 			const void *location;
 			const unsigned char *name;
@@ -379,12 +379,12 @@ int elf_rel_load(struct mem_ehdr *ehdr, struct kexec_info *info,
 			 * Relocation Entries: If the index is STN_UNDEF,
 			 * the undefined symbol index, the relocation uses 0
 			 * as the "symbol value".
-			 * So, is this really an error condition to flag die?
+			 * TOC symbols appear as undefined but should be
+			 * resolved as well. Their type is STT_NOTYPE so allow
+			 * such symbols to be processed.
 			 */
-			/*
-				die("Undefined symbol: %s\n", name);
-			*/
-				continue;
+				if (ELF32_ST_TYPE(sym.st_info) != STT_NOTYPE)
+					die("Undefined symbol: %s\n", name);
 			}
 			sec_base = 0;
 			if (sym.st_shndx == SHN_COMMON) {
@@ -513,7 +513,7 @@ void elf_rel_set_symbol(struct mem_ehdr *ehdr,
 			name);
 	}
 	if (sym.st_size != size) {
-		die("Symbol: %s has size: %lld not %ld\n",
+		die("Symbol: %s has size: %lld not %zd\n",
 			name, sym.st_size, size);
 	}
 	shdr = &ehdr->e_shdr[sym.st_shndx];
@@ -537,7 +537,7 @@ void elf_rel_get_symbol(struct mem_ehdr *ehdr,
 		die("Symbol: %s not found cannot get\n", name);
 	}
 	if (sym.st_size != size) {
-		die("Symbol: %s has size: %lld not %ld\n",
+		die("Symbol: %s has size: %lld not %zd\n",
 			name, sym.st_size, size);
 	}
 	shdr = &ehdr->e_shdr[sym.st_shndx];

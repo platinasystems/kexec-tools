@@ -4,6 +4,4 @@ distclean_fix.patch
 add_debian_readme.patch
 coldreboot.patch
 linker-option.patch
-kdump_makefile.patch
-kexec-p-fails-to-load-kernels-with-version-x.y.patch
-fix-powerpcspe.patch
+const_string_warning.patch

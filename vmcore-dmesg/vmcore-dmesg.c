@@ -16,6 +16,7 @@
 #include <elf.h>
 #include <stdbool.h>
 #include <inttypes.h>
+#include <ctype.h>
 
 /* The 32bit and 64bit note headers make it clear we don't care */
 typedef Elf32_Nhdr Elf_Nhdr;
@@ -34,10 +35,10 @@ static loff_t logged_chars_vaddr;
 static loff_t log_first_idx_vaddr;
 static loff_t log_next_idx_vaddr;
 
-/* struct log size */
+/* struct printk_log (or older log) size */
 static uint64_t log_sz;
 
-/* struct log field offsets */
+/* struct printk_log (or older log) field offsets */
 static uint64_t log_offset_ts_nsec = UINT64_MAX;
 static uint16_t log_offset_len = UINT16_MAX;
 static uint16_t log_offset_text_len = UINT16_MAX;
@@ -254,6 +255,7 @@ static void scan_vmcoreinfo(char *start, size_t size)
 	char *pos, *eol;
 	char temp_buf[1024];
 	bool last_line = false;
+	char *str;
 
 #define SYMBOL(sym) {					\
 	.str = "SYMBOL(" #sym  ")=",			\
@@ -324,19 +326,41 @@ static void scan_vmcoreinfo(char *start, size_t size)
 			*symbol[i].vaddr = vaddr;
 		}
 
-		/* Check for "SIZE(log)=" */
-		if (memcmp("SIZE(log)=", pos, 10) == 0)
-			log_sz = strtoull(pos + 10, NULL, 10);
+		/* Check for "SIZE(printk_log)" or older "SIZE(log)=" */
+		str = "SIZE(log)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_sz = strtoull(pos + strlen(str), NULL, 10);
 
-		/* Check for struct log field offsets */
-		if (memcmp("OFFSET(log.ts_nsec)=", pos, 20) == 0)
-			log_offset_ts_nsec = strtoull(pos + 20, NULL, 10);
+		str = "SIZE(printk_log)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_sz = strtoull(pos + strlen(str), NULL, 10);
 
-		if (memcmp("OFFSET(log.len)=", pos, 16) == 0)
-			log_offset_len = strtoul(pos + 16, NULL, 10);
+		/* Check for struct printk_log (or older log) field offsets */
+		str = "OFFSET(log.ts_nsec)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_offset_ts_nsec = strtoull(pos + strlen(str), NULL,
+							10);
+		str = "OFFSET(printk_log.ts_nsec)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_offset_ts_nsec = strtoull(pos + strlen(str), NULL,
+							10);
 
-		if (memcmp("OFFSET(log.text_len)=", pos, 21) == 0)
-			log_offset_text_len = strtoul(pos + 21, NULL, 10);
+		str = "OFFSET(log.len)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_offset_len = strtoul(pos + strlen(str), NULL, 10);
+
+		str = "OFFSET(printk_log.len)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_offset_len = strtoul(pos + strlen(str), NULL, 10);
+
+		str = "OFFSET(log.text_len)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_offset_text_len = strtoul(pos + strlen(str), NULL,
+							10);
+		str = "OFFSET(printk_log.text_len)=";
+		if (memcmp(str, pos, strlen(str)) == 0)
+			log_offset_text_len = strtoul(pos + strlen(str), NULL,
+							10);
 
 		if (last_line)
 			break;
@@ -529,7 +553,7 @@ static inline uint32_t struct_val_u32(char *ptr, unsigned int offset)
 	return(file32_to_cpu(*(uint32_t *)(ptr + offset)));
 }
 
-static inline uint32_t struct_val_u64(char *ptr, unsigned int offset)
+static inline uint64_t struct_val_u64(char *ptr, unsigned int offset)
 {
 	return(file64_to_cpu(*(uint64_t *)(ptr + offset)));
 }
@@ -668,12 +692,12 @@ static void dump_dmesg_structured(int fd)
 		for (i = 0; i < text_len; i++) {
 			unsigned char c = log_text(msg)[i];
 
-			if (c < ' ' || c >= 128)
+			if (!isprint(c) && !isspace(c))
 				len += sprintf(out_buf + len, "\\x%02x", c);
 			else
 				out_buf[len++] = c;
 
-			if (len >= OUT_BUF_SIZE - 16) {
+			if (len >= OUT_BUF_SIZE - 64) {
 				write_to_stdout(out_buf, len);
 				len = 0;
 			}

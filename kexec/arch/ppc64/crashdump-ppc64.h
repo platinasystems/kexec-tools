@@ -1,6 +1,9 @@
 #ifndef CRASHDUMP_PPC64_H
 #define CRASHDUMP_PPC64_H
 
+#include <stdint.h>
+#include <sys/types.h>
+
 struct kexec_info;
 int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 				uint64_t max_addr, unsigned long min_base);
@@ -28,6 +31,8 @@ extern uint64_t crash_size;
 extern uint64_t memory_limit;
 extern unsigned int rtas_base;
 extern unsigned int rtas_size;
+extern uint64_t opal_base;
+extern uint64_t opal_size;
 
 uint64_t lmb_size;
 unsigned int num_of_lmbs;

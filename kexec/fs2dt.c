@@ -84,7 +84,7 @@ static void dt_reserve(unsigned **dt_ptr, unsigned words)
 		offset = *dt_ptr - dt_base;
 		dt_base = new_dt;
 		dt_cur_size = new_size;
-		*dt_ptr = cpu_to_be32((unsigned)dt_base + offset);
+		*dt_ptr = dt_base + offset;
 		memset(*dt_ptr, 0, (new_size - offset)*4);
 	}
 }
@@ -112,19 +112,26 @@ static void checkprop(char *name, unsigned *data, int len)
 	if ((data == NULL) && (base || size || end))
 		die("unrecoverable error: no property data");
 	else if (!strcmp(name, "linux,rtas-base"))
-		base = *data;
+		base = be32_to_cpu(*data);
+	else if (!strcmp(name, "opal-base-address"))
+		base = be64_to_cpu(*(unsigned long long *)data);
+	else if (!strcmp(name, "opal-runtime-size"))
+		size = be64_to_cpu(*(unsigned long long *)data);
 	else if (!strcmp(name, "linux,tce-base"))
-		base = *(unsigned long long *) data;
+		base = be64_to_cpu(*(unsigned long long *) data);
 	else if (!strcmp(name, "rtas-size") ||
 			!strcmp(name, "linux,tce-size"))
-		size = *data;
+		size = be32_to_cpu(*data);
 	else if (reuse_initrd && !strcmp(name, "linux,initrd-start"))
 		if (len == 8)
-			base = *(unsigned long long *) data;
+			base = be64_to_cpu(*(unsigned long long *) data);
 		else
-			base = *data;
+			base = be32_to_cpu(*data);
 	else if (reuse_initrd && !strcmp(name, "linux,initrd-end"))
-		end = *(unsigned long long *) data;
+		if (len == 8)
+			end = be64_to_cpu(*(unsigned long long *) data);
+		else
+			end = be32_to_cpu(*data);
 
 	if (size && end)
 		die("unrecoverable error: size and end set at same time\n");
@@ -194,7 +201,7 @@ static void add_dyn_reconf_usable_mem_property__(int fd)
 			die("unrecoverable error: error reading \"%s\": %s\n",
 				pathname, strerror(errno));
 
-		base = (uint64_t) buf[0];
+		base = be64_to_cpu((uint64_t) buf[0]);
 		end = base + lmb_size;
 		if (~0ULL - base < end)
 			die("unrecoverable error: mem property overflow\n");
@@ -226,8 +233,8 @@ static void add_dyn_reconf_usable_mem_property__(int fd)
 						    " ranges.\n",
 						    ranges_size*8);
 				}
-				ranges[rlen++] = loc_base;
-				ranges[rlen++] = loc_end - loc_base;
+				ranges[rlen++] = cpu_to_be64(loc_base);
+				ranges[rlen++] = cpu_to_be64(loc_end - loc_base);
 				rngs_cnt++;
 			}
 		}
@@ -252,7 +259,7 @@ static void add_dyn_reconf_usable_mem_property__(int fd)
 			}
 		} else {
 			/* Store the count of (base, size) duple */
-			ranges[tmp_indx] = rngs_cnt;
+			ranges[tmp_indx] = cpu_to_be64((uint64_t) rngs_cnt);
 		}
 	}
 		
@@ -267,7 +274,7 @@ static void add_dyn_reconf_usable_mem_property__(int fd)
 	pad_structure_block(rlen);
 	memcpy(dt, ranges, rlen);
 	free(ranges);
-	dt += cpu_to_be32((rlen + 3)/4);
+	dt += (rlen + 3)/4;
 }
 
 static void add_dyn_reconf_usable_mem_property(struct dirent *dp, int fd)
@@ -282,8 +289,8 @@ static void add_dyn_reconf_usable_mem_property(struct dirent *dp, int fd) {}
 static void add_usable_mem_property(int fd, size_t len)
 {
 	char fname[MAXPATH], *bname;
-	uint32_t buf[2];
-	uint32_t *ranges;
+	uint64_t buf[2];
+	uint64_t *ranges;
 	int ranges_size = MEM_RANGE_CHUNK_SZ;
 	uint64_t base, end, loc_base, loc_end;
 	size_t range;
@@ -306,10 +313,11 @@ static void add_usable_mem_property(int fd, size_t len)
 		die("unrecoverable error: error reading \"%s\": %s\n",
 		    pathname, strerror(errno));
 
-	if (~0ULL - buf[0] < buf[1])
+	base = be64_to_cpu(buf[0]);
+	end = be64_to_cpu(buf[1]);
+	if (~0ULL - base < end)
 		die("unrecoverable error: mem property overflow\n");
-	base = be32_to_cpu(buf[0]);
-	end = base + be32_to_cpu(buf[1]);
+	end += base;
 
 	ranges = malloc(ranges_size * sizeof(*ranges));
 	if (!ranges)
@@ -339,8 +347,8 @@ static void add_usable_mem_property(int fd, size_t len)
 					    "%d bytes for ranges.\n",
 					    ranges_size*sizeof(*ranges));
 			}
-			ranges[rlen++] = loc_base;
-			ranges[rlen++] = loc_end - loc_base;
+			ranges[rlen++] = cpu_to_be64(loc_base);
+			ranges[rlen++] = cpu_to_be64(loc_end - loc_base);
 		}
 	}
 
@@ -527,7 +535,7 @@ static void putnode(void)
 	/* Add initrd entries to the second kernel */
 	if (initrd_base && initrd_size && !strcmp(basename,"chosen/")) {
 		int len = 8;
-		unsigned long long initrd_end;
+		uint64_t bevalue;
 
 		dt_reserve(&dt, 12); /* both props, of 6 words ea. */
 		*dt++ = cpu_to_be32(3);
@@ -535,7 +543,8 @@ static void putnode(void)
 		*dt++ = cpu_to_be32(propnum("linux,initrd-start"));
 		pad_structure_block(len);
 
-		memcpy(dt,&initrd_base,len);
+		bevalue = cpu_to_be64(initrd_base);
+		memcpy(dt, &bevalue, len);
 		dt += (len + 3)/4;
 
 		len = 8;
@@ -543,10 +552,10 @@ static void putnode(void)
 		*dt++ = cpu_to_be32(len);
 		*dt++ = cpu_to_be32(propnum("linux,initrd-end"));
 
-		initrd_end = initrd_base + initrd_size;
+		bevalue = cpu_to_be64(initrd_base + initrd_size);
 		pad_structure_block(len);
 
-		memcpy(dt,&initrd_end,len);
+		memcpy(dt, &bevalue, len);
 		dt += (len + 3)/4;
 
 		reserve(initrd_base, initrd_size);
@@ -555,6 +564,7 @@ static void putnode(void)
 	/* Add cmdline to the second kernel.  Check to see if the new
 	 * cmdline has a root=.  If not, use the old root= cmdline.  */
 	if (!strcmp(basename,"chosen/")) {
+		size_t result;
 		size_t cmd_len = 0;
 		char *param = NULL;
 		char filename[MAXPATH];
@@ -614,8 +624,7 @@ static void putnode(void)
 		 * code can print 'I'm in purgatory' message. Currently only
 		 * pseries/hvcterminal is supported.
 		 */
-		strcpy(filename, pathname);
-		strncat(filename, "linux,stdout-path", MAXPATH);
+		snprintf(filename, MAXPATH, "%slinux,stdout-path", pathname);
 		fd = open(filename, O_RDONLY);
 		if (fd == -1) {
 			printf("Unable to find %s, printing from purgatory is diabled\n",
@@ -636,11 +645,14 @@ static void putnode(void)
 			close(fd);
 			goto no_debug;
 		}
-		read(fd, buff, statbuf.st_size);
+		result = read(fd, buff, statbuf.st_size);
 		close(fd);
-		strncpy(filename, "/proc/device-tree/", MAXPATH);
-		strncat(filename, buff, MAXPATH);
-		strncat(filename, "/compatible", MAXPATH);
+		if (result <= 0) {
+			printf("Unable to read %s, printing from purgatory is diabled\n",
+														filename);
+			goto no_debug;
+		}
+		snprintf(filename, MAXPATH, "/proc/device-tree/%s/compatible", buff);
 		fd = open(filename, O_RDONLY);
 		if (fd == -1) {
 			printf("Unable to find %s printing from purgatory is diabled\n",
@@ -659,8 +671,9 @@ static void putnode(void)
 			close(fd);
 			goto no_debug;
 		}
-		read(fd, buff, statbuf.st_size);
-		if (!strcmp(buff, "hvterm1") || !strcmp(buff, "hvterm-protocol"))
+		result = read(fd, buff, statbuf.st_size);
+		if (result && (!strcmp(buff, "hvterm1")
+			|| !strcmp(buff, "hvterm-protocol")))
 			my_debug = 1;
 		close(fd);
 		free(buff);

@@ -1,8 +1,11 @@
-kexec-tools (1:2.0.4-1+powerpcspe1) unreleased; urgency=low
+kexec-tools (1:2.0.7-1) unstable; urgency=low
 
-  * Build on powerpcspe
+  * New upstream release. Refreshed patches to apply without offsets
+  * Stopped passing start/stop to update-rc.d
+  * Includes fix for multiboot image booting bug from upstream 
+    (closes: Bug#735360)
 
- -- Roland Stigge <stigge@antcom.de>  Wed, 08 Jan 2014 23:16:36 +0100
+ -- Khalid Aziz <khalid@debian.org>  Wed, 09 Jul 2014 10:44:35 -0600
 
 kexec-tools (1:2.0.4-1) unstable; urgency=low
 

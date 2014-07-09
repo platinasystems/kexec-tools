@@ -4,10 +4,10 @@ Homepage: http://kernel.org/pub/linux/utils/kernel/kexec/
 Priority: optional
 Maintainer: Khalid Aziz <khalid@debian.org>
 Build-Depends: debhelper (>= 7.0.0), autoconf, gnu-efi (>=3.0a-4)[ia64], libz-dev[ia64], po-debconf
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 
 Package: kexec-tools
-Architecture: i386 amd64 ppc64 powerpc powerpcspe ia64 s390 arm armel armhf sh4 mips mipsel
+Architecture: i386 amd64 ppc64 powerpc ia64 s390 arm armel armhf sh4 mips mipsel
 Depends: ${shlibs:Depends}, ${misc:Depends}, debconf
 Description: tools to support fast kexec reboots
  This package provides tools to load a kernel into memory and then
@@ -16,7 +16,7 @@ Description: tools to support fast kexec reboots
 
 Package: kexec-tools-udeb
 Section: debian-installer
-Architecture: i386 amd64 ppc64 powerpc powerpcspe ia64 s390 arm armel armhf sh4 mips mipsel
+Architecture: i386 amd64 ppc64 powerpc ia64 s390 arm armel armhf sh4 mips mipsel
 XC-Package-Type: udeb
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Description: tools to support fast kexec reboots (udeb)

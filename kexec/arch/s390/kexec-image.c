@@ -21,7 +21,6 @@
 #include "../../kexec-syscall.h"
 #include "../../kexec/crashdump.h"
 #include "kexec-s390.h"
-#include "elf.h"
 #include <arch/options.h>
 
 static uint64_t crash_base, crash_end;
@@ -73,10 +72,6 @@ image_s390_load(int argc, char **argv, const char *kernel_buf,
 
 	while ((opt = getopt_long(argc,argv,short_options,options,0)) != -1) {
 		switch(opt) {
-		case '?':
-			usage();
-			return -1;
-			break;
 		case OPT_APPEND:
 			if (command_line_add(optarg))
 				return -1;

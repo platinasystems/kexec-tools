@@ -1,6 +1,6 @@
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -177,11 +177,13 @@ PSRCS:=$(foreach s, $(SRCS), $(PACKAGE_N
+@@ -178,11 +178,13 @@ PSRCS:=$(foreach s, $(SRCS), $(PACKAGE_N
  PGSRCS:=$(foreach s, $(GENERATED_SRCS), $(PACKAGE_NAME)-$(PACKAGE_VERSION)/$(s))
  
  MAN_PAGES:=$(KEXEC_MANPAGE) $(KDUMP_MANPAGE) $(VMCORE_DMESG_MANPAGE)
@@ -17,7 +17,7 @@
  
 --- a/kexec/Makefile
 +++ b/kexec/Makefile
-@@ -90,6 +90,8 @@ clean += $(KEXEC_OBJS) $(KEXEC_DEPS) $(K
+@@ -92,6 +92,8 @@ clean += $(KEXEC_OBJS) $(KEXEC_DEPS) $(K
  
  KEXEC = $(SBINDIR)/kexec
  KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
@@ -26,7 +26,7 @@
  
  -include $(KEXEC_DEPS)
  
-@@ -104,6 +106,16 @@ kexec/fs2dt.o: CPPFLAGS+=$($(ARCH)_FS2DT
+@@ -106,6 +108,16 @@ kexec/fs2dt.o: CPPFLAGS+=$($(ARCH)_FS2DT
  $(KEXEC_MANPAGE): kexec/kexec.8
  	@$(MKDIR) -p     $(MANDIR)/man8
  	cp $^ $(KEXEC_MANPAGE)
