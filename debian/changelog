@@ -1,3 +1,17 @@
+kexec-tools (1:2.0.7-2) unstable; urgency=medium
+
+  * Fix build failure on ppc (closes: Bug#754609)
+  * Replaced s390 arch with s390x (closes: Bug#729451)
+  * Added patch from Roland to support powerpcspe (closes: Bug#734697)
+  * Added support for systemd (closes: Bug#764360, closes: Bug#699008)
+  * Enhanced kexec init scripts to work with systemd as well and now
+    "sudo reboot" from an X11 terminal works (closes: Bug#747119)
+  * Includes upstream fix to align initrd_base address to pagesize
+    (closes: Bug#756127)
+  * Added Turkish translation (closes: Bug#757510)
+
+ -- Khalid Aziz <khalid@debian.org>  Wed, 08 Oct 2014 11:01:58 -0600
+
 kexec-tools (1:2.0.7-1) unstable; urgency=low
 
   * New upstream release. Refreshed patches to apply without offsets

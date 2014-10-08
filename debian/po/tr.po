@@ -1,0 +1,54 @@
+# Turkish translation of kexec-tools package
+# Copyright (C) 2014 Mert Dirik
+# This file is distributed under the same license as the kexec-tools package.
+# Mert Dirik <mertdirik@gmail.com>, 2014.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: kexec-tools 1%3a2.0.7-1\n"
+"Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
+"POT-Creation-Date: 2011-08-25 18:55+0200\n"
+"PO-Revision-Date: 2014-08-01 17:02+0200\n"
+"Last-Translator: Mert Dirik <mertdirik@gmail.com>\n"
+"Language-Team: Debian L10n Turkish <debian-l10n-turkish@lists.debian.org>\n"
+"Language: tr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: Poedit 1.5.4\n"
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid "Should kexec-tools handle reboots?"
+msgstr "kexec-tools yeniden başlatma işlerini idare etsin mi?"
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:2001
+msgid ""
+"If you choose this option, a system reboot will trigger a restart into a "
+"kernel loaded by kexec instead of going through the full system boot loader "
+"process."
+msgstr ""
+"Bu seçenek etkinleştirilirse, sistemi yeniden başlatma işlemi sistem "
+"önyükleme sürecini kullanmayacak, bunun yerine kexec tarafından yüklenmiş "
+"olan çekirdek ile doğrudan yeniden başlatma yapacaktır."
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:3001
+msgid "Read GRUB configuration file to load the kernel?"
+msgstr "Çekirdeği yüklemek için GRUB yapılandırma dosyası okunsun mu?"
+
+#. Type: boolean
+#. Description
+#: ../kexec-tools.templates:3001
+msgid ""
+"If you choose this option, kexec will read the GRUB configuration file to "
+"determine which kernel and options to load for kexec reboot, as opposed to "
+"what is in /etc/default/kexec."
+msgstr ""
+"Bu seçeneği seçmeniz halinde kexec, yeniden başlatma işleminde hangi "
+"çekirdeği ve hangi seçenekleri kullanacağına karar vermek için /etc/default/"
+"kexec dosyası yerine GRUB yapılandırma dosyasını okur."

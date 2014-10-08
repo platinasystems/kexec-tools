@@ -1,10 +1,10 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:		kexec-load
-# Required-Start:
+# Required-Start:	$local_fs $remote_fs kexec
 # Required-Stop:	$local_fs $remote_fs kexec
 # Should-Stop:		autofs
-# Default-Start:
+# Default-Start:	2 3 4 5
 # Default-Stop:		6
 # Short-Description: Load kernel image with kexec
 # Description:
@@ -101,6 +101,12 @@ case "$1" in
 	exit 3
 	;;
   stop)
+	# We want kexec reboot only if current command is reboot
+	systemctl list-jobs systemd-reboot.service | grep -q systemd-reboot.service
+	if [ $? -ne 0 ]
+	then
+		exit 0
+	fi
 	do_stop
 	;;
   *)
