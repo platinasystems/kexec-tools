@@ -1,6 +1,5 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
-# Sample debian/rules that uses debhelper.
 # This file was originally written by Joey Hess and Craig Small.
 # As a special exception, when this file is copied by dh-make into a
 # dh-make output file, you may use that output file without restriction.
@@ -26,8 +25,7 @@ configure: configure-stamp
 configure-stamp: 
 	dh_testdir
 	# Add here commands to configure the package.
-	autoheader
-	autoconf
+	dh_autoreconf
 	CPPFLAGS="$(shell dpkg-buildflags --get CPPFLAGS)" CFLAGS="$(shell dpkg-buildflags --get CFLAGS)" LDFLAGS="$(shell dpkg-buildflags --get LDFLAGS)" ./configure --prefix=/usr --sbindir=/sbin --mandir=/usr/share/man --datadir=/usr/share
 
 	touch configure-stamp
@@ -56,6 +54,7 @@ tidy: configure-stamp
 	# Add here commands to clean up after the build process.
 	$(MAKE) dist-clean
 
+	dh_autoreconf_clean
 	dh_clean 
 	debconf-updatepo
 

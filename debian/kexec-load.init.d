@@ -101,11 +101,14 @@ case "$1" in
 	exit 3
 	;;
   stop)
-	# We want kexec reboot only if current command is reboot
-	systemctl list-jobs systemd-reboot.service | grep -q systemd-reboot.service
-	if [ $? -ne 0 ]
-	then
-		exit 0
+	# If running systemd, we want kexec reboot only if current
+	# command is reboot
+	pidof systemd > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		systemctl list-jobs systemd-reboot.service | grep -q systemd-reboot.service
+		if [ $? -ne 0 ]; then
+			exit 0
+		fi
 	fi
 	do_stop
 	;;
