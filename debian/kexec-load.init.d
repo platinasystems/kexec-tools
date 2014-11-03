@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/sh -x
 ### BEGIN INIT INFO
 # Provides:		kexec-load
 # Required-Start:	$local_fs $remote_fs kexec
@@ -103,8 +103,7 @@ case "$1" in
   stop)
 	# If running systemd, we want kexec reboot only if current
 	# command is reboot
-	pidof systemd > /dev/null 2>&1
-	if [ $? -eq 0 ]; then
+	if [ -d /run/systemd/system ]; then
 		systemctl list-jobs systemd-reboot.service | grep -q systemd-reboot.service
 		if [ $? -ne 0 ]; then
 			exit 0
