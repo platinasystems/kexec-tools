@@ -1,4 +1,4 @@
-#! /bin/sh -x
+#! /bin/sh
 ### BEGIN INIT INFO
 # Provides:		kexec-load
 # Required-Start:	$local_fs $remote_fs kexec
