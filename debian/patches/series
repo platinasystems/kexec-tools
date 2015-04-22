@@ -6,3 +6,4 @@ coldreboot.patch
 linker-option.patch
 const_string_warning.patch
 powerpcspe_support.patch
+fix-callback-functions-given-to-kexec_iomem_for_each_line.patch

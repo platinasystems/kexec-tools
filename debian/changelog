@@ -1,3 +1,11 @@
+kexec-tools (1:2.0.7-5.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Don't reboot the machine while removing the package (Closes: #782033)
+  * Fix loading kdump kernel on i386 (Closes: #771671)
+
+ -- Balint Reczey <balint@balintreczey.hu>  Wed, 22 Apr 2015 12:04:44 +0200
+
 kexec-tools (1:2.0.7-5) unstable; urgency=medium
 
   * Deleted the extra "-x" from "#!/bin/sh -x" in kexec-load init

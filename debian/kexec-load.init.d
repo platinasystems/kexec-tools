@@ -109,6 +109,9 @@ case "$1" in
 			exit 0
 		fi
 	fi
+	if [ -x /sbin/runlevel -a "$(runlevel | awk '{ print $2 }')" != "6" ]; then 
+		exit 0
+	fi
 	do_stop
 	;;
   *)
