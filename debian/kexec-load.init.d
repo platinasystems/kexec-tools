@@ -102,15 +102,17 @@ case "$1" in
 	;;
   stop)
 	# If running systemd, we want kexec reboot only if current
-	# command is reboot
+	# command is reboot. If not running systemd, check if
+	# runlevel has been changed to 6 which indicates we are
+	# rebooting
 	if [ -d /run/systemd/system ]; then
 		systemctl list-jobs systemd-reboot.service | grep -q systemd-reboot.service
 		if [ $? -ne 0 ]; then
 			exit 0
 		fi
-	fi
-	if [ -x /sbin/runlevel -a "$(runlevel | awk '{ print $2 }')" != "6" ]; then 
-		exit 0
+	else if [ -x /sbin/runlevel -a "$(runlevel | awk '{ print $2 }')" != "6" ]; then 
+			exit 0
+		fi
 	fi
 	do_stop
 	;;

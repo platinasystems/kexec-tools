@@ -381,8 +381,8 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 {
 	struct dirent *dp;
 	int i = 0, fd;
-	size_t len;
-	ssize_t slen;
+	off_t len;
+	off_t slen;
 	struct stat statbuf;
 
 	for (i = 0; i < numlist; i++) {
@@ -443,22 +443,26 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 		*dt++ = cpu_to_be32(propnum(fn));
 		pad_structure_block(len);
 
-		fd = open(pathname, O_RDONLY);
-		if (fd == -1)
-			die("unrecoverable error: could not open \"%s\": %s\n",
-			    pathname, strerror(errno));
+		if (len) {
+			char *buf;
 
-		slen = read(fd, dt, len);
-		if (slen < 0)
-			die("unrecoverable error: could not read \"%s\": %s\n",
-			    pathname, strerror(errno));
-		if ((size_t)slen != len)
-			die("unrecoverable error: short read from\"%s\"\n",
-			    pathname);
+			buf = slurp_file_len(pathname, len, &slen);
+			if (slen != len)
+				die("unrecoverable error: short read from\"%s\"\n",
+				    pathname);
+
+			memcpy(dt, buf, slen);
+			free(buf);
+		}
 
 		checkprop(fn, dt, len);
 
 		dt += (len + 3)/4;
+
+		fd = open(pathname, O_RDONLY);
+		if (fd == -1)
+			die("unrecoverable error: could not open \"%s\": %s\n",
+			    pathname, strerror(errno));
 
 		if (!strcmp(dp->d_name, "reg") && usablemem_rgns.size)
 			add_usable_mem_property(fd, len);
@@ -479,6 +483,8 @@ static int comparefunc(const struct dirent **dentry1,
 {
 	char *str1 = (*(struct dirent **)dentry1)->d_name;
 	char *str2 = (*(struct dirent **)dentry2)->d_name;
+	char *sep1 = strchr(str1, '@');
+	char *sep2 = strchr(str2, '@');
 
 	/*
 	 * strcmp scans from left to right and fails to idetify for some
@@ -486,9 +492,20 @@ static int comparefunc(const struct dirent **dentry1,
 	 * Therefore, we get the wrong sorted order like memory@10000000 and
 	 * memory@f000000.
 	 */
-	if (strchr(str1, '@') && strchr(str2, '@') &&
-		(strlen(str1) > strlen(str2)))
-		return 1;
+	if (sep1 && sep2) {
+		int baselen1 = sep1 - str1;
+		int baselen2 = sep2 - str2;
+		int len1 = strlen(str1);
+		int len2 = strlen(str2);
+
+		/*
+		 * Check the base name matches, and the properties are
+		 * different lengths.
+		 */
+		if ((baselen1 == baselen2) && (len1 != len2) &&
+		    !strncmp(str1, str2, baselen2))
+			return (len1 > len2) - (len1 < len2);
+	}
 
 	return strcmp(str1, str2);
 }
