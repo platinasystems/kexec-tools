@@ -122,16 +122,17 @@ static void checkprop(char *name, unsigned *data, int len)
 	else if (!strcmp(name, "rtas-size") ||
 			!strcmp(name, "linux,tce-size"))
 		size = be32_to_cpu(*data);
-	else if (reuse_initrd && !strcmp(name, "linux,initrd-start"))
+	else if (reuse_initrd && !strcmp(name, "linux,initrd-start")) {
 		if (len == 8)
 			base = be64_to_cpu(*(unsigned long long *) data);
 		else
 			base = be32_to_cpu(*data);
-	else if (reuse_initrd && !strcmp(name, "linux,initrd-end"))
+	} else if (reuse_initrd && !strcmp(name, "linux,initrd-end")) {
 		if (len == 8)
 			end = be64_to_cpu(*(unsigned long long *) data);
 		else
 			end = be32_to_cpu(*data);
+	}
 
 	if (size && end)
 		die("unrecoverable error: size and end set at same time\n");
@@ -321,7 +322,7 @@ static void add_usable_mem_property(int fd, size_t len)
 
 	ranges = malloc(ranges_size * sizeof(*ranges));
 	if (!ranges)
-		die("unrecoverable error: can't alloc %d bytes for ranges.\n",
+		die("unrecoverable error: can't alloc %zu bytes for ranges.\n",
 		    ranges_size * sizeof(*ranges));
 
 	for (range = 0; range < usablemem_rgns.size; range++) {
@@ -344,7 +345,7 @@ static void add_usable_mem_property(int fd, size_t len)
 						 sizeof(*ranges));
 				if (!ranges)
 					die("unrecoverable error: can't realloc"
-					    "%d bytes for ranges.\n",
+					    "%zu bytes for ranges.\n",
 					    ranges_size*sizeof(*ranges));
 			}
 			ranges[rlen++] = cpu_to_be64(loc_base);

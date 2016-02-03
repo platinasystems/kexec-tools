@@ -8,8 +8,8 @@
 +	int error_code = 0;
  	int result;
  	int command_line_len;
- 	int modified_cmdline_len;
-@@ -221,7 +221,7 @@ int elf_x86_load(int argc, char **argv,
+ 	const char *ramdisk;
+@@ -218,7 +218,7 @@ int elf_x86_load(int argc, char **argv,
  		elf_rel_set_symbol(&info->rhdr, "entry32_regs", &regs, sizeof(regs));
  
  		if (ramdisk) {
@@ -18,7 +18,7 @@
  			goto out;
  		}
  	}
-@@ -292,13 +292,20 @@ int elf_x86_load(int argc, char **argv,
+@@ -289,13 +289,20 @@ int elf_x86_load(int argc, char **argv,
  		elf_rel_set_symbol(&info->rhdr, "entry32_regs", &regs, sizeof(regs));
  	}
  	else {

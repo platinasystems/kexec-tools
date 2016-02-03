@@ -4,10 +4,11 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.9)
+AC_INIT(kexec-tools, 2.0.10)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
+AC_PROG_CC
 
 AC_DEFINE_UNQUOTED(PACKAGE_DATE, "`date '+%d %B %Y'`",
 		[Define to the release date of this package])
@@ -97,9 +98,6 @@ AC_ARG_WITH([booke],
 
 dnl ---Programs
 dnl To specify a different compiler, just 'export CC=/path/to/compiler'
-
-AC_PROG_CC
-
 if test "${build}" != "${host}" ; then
 	AC_CHECK_PROGS(BUILD_CC, [${build_alias}-gcc ${build}-gcc gcc])
 else
@@ -152,22 +150,22 @@ AC_CHECK_PROG([DIRNAME],  dirname,  dirname,  "no", [$PATH])
 dnl See if I have a usable copy of zlib available
 if test "$with_zlib" = yes ; then
 	AC_CHECK_HEADER(zlib.h,
-		AC_CHECK_LIB(z, inflateInit_, ,
-		AC_MSG_NOTICE([zlib support disabled])))
+		[AC_CHECK_LIB(z, inflateInit_, ,
+		AC_MSG_NOTICE([zlib support disabled]))])
 fi
 
 dnl See if I have a usable copy of lzma available
 if test "$with_lzma" = yes ; then
 	AC_CHECK_HEADER(lzma.h,
-		AC_CHECK_LIB(lzma, lzma_code, ,
-		AC_MSG_NOTICE([lzma support disabled])))
+		[AC_CHECK_LIB(lzma, lzma_code, ,
+		AC_MSG_NOTICE([lzma support disabled]))])
 fi
 
 dnl find Xen control stack libraries
 if test "$with_xen" = yes ; then
 	AC_CHECK_HEADER(xenctrl.h,
-		AC_CHECK_LIB(xenctrl, xc_kexec_load, ,
-		AC_MSG_NOTICE([Xen support disabled])))
+		[AC_CHECK_LIB(xenctrl, xc_kexec_load, ,
+		AC_MSG_NOTICE([Xen support disabled]))])
 fi
 
 dnl ---Sanity checks

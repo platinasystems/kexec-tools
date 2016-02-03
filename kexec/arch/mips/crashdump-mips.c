@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
+#include <inttypes.h>
 #include <elf.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -52,7 +53,7 @@ static int get_kernel_paddr(struct crash_elf_info *elf_info)
 
 	if (parse_iomem_single("Kernel code\n", &start, NULL) == 0) {
 		elf_info->kern_paddr_start = start;
-		dbgprintf("kernel load physical addr start = 0x%lx\n", start);
+		dbgprintf("kernel load physical addr start = 0x%" PRIu64 "\n", start);
 		return 0;
 	}
 
@@ -147,7 +148,7 @@ static int exclude_crash_reserve_region(int *nr_ranges)
 static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 {
 	const char iomem[] = "/proc/iomem";
-	int i, memory_ranges = 0;
+	int memory_ranges = 0;
 	char line[MAX_LINE];
 	FILE *fp;
 	unsigned long long start, end;
