@@ -1,14 +1,14 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the PACKAGE package.
+# This file is distributed under the same license as the kexec-tools package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: kexec-tools\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2011-08-25 18:55+0200\n"
+"POT-Creation-Date: 2016-03-22 17:16-0600\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -20,7 +20,7 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-msgid "Should kexec-tools handle reboots?"
+msgid "Should kexec-tools handle reboots (sysvinit only)?"
 msgstr ""
 
 #. Type: boolean

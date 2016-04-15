@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2011-08-25 18:55+0200\n"
+"POT-Creation-Date: 2016-03-22 17:16-0600\n"
 "PO-Revision-Date: 2011-09-01 22:40+0100\n"
 "Last-Translator: Martin Bagge / brother <brother@bsnet.se>\n"
 "Language-Team: swedish <debian-l10n-swedish@lists.debian.org>\n"
@@ -22,7 +22,9 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-msgid "Should kexec-tools handle reboots?"
+#, fuzzy
+#| msgid "Should kexec-tools handle reboots?"
+msgid "Should kexec-tools handle reboots (sysvinit only)?"
 msgstr "Ska kexec-tools hantera omstarter?"
 
 #. Type: boolean

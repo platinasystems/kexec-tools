@@ -22,8 +22,8 @@ case "$1" in
 	# kexec init script runlevels have been updated for systemd for
 	# kexec-tools 1:2.0.7-2. Remove current init scripts if upgrading
 	if dpkg --compare-versions "$2" lt "1:2.0.7-2"; then
-		update-rc.d kexec remove
-		update-rc.d kexec-load remove
+		update-rc.d -f kexec remove
+		update-rc.d -f kexec-load remove
 	fi
     ;;
 

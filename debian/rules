@@ -9,6 +9,9 @@
 #export DH_VERBOSE=1
 
 
+BUILD_DATE = $(shell dpkg-parsechangelog -S Date | date -u +'%d %B %Y' -f -)
+export BUILD_DATE
+
 ifneq (,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
 	NJOBS := -j $(subst parallel=,,$(filter parallel=%,$(subst $(COMMA), ,$(DEB_BUILD_OPTIONS))))
 endif

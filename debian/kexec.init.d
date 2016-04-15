@@ -36,7 +36,11 @@ case "$1" in
 	exit 3
 	;;
   stop)
-	do_stop
+	# Systemd has its own kexec service (which will call the kexec
+	# binary), so skip, if running with systemd
+	if [ ! -d /run/systemd/system ]; then
+		do_stop
+	fi
 	;;
   *)
 	echo "Usage: $0 start|stop" >&2

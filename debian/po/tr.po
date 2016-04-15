@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools 1%3a2.0.7-1\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
-"POT-Creation-Date: 2011-08-25 18:55+0200\n"
+"POT-Creation-Date: 2016-03-22 17:16-0600\n"
 "PO-Revision-Date: 2014-08-01 17:02+0200\n"
 "Last-Translator: Mert Dirik <mertdirik@gmail.com>\n"
 "Language-Team: Debian L10n Turkish <debian-l10n-turkish@lists.debian.org>\n"
@@ -20,7 +20,9 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-msgid "Should kexec-tools handle reboots?"
+#, fuzzy
+#| msgid "Should kexec-tools handle reboots?"
+msgid "Should kexec-tools handle reboots (sysvinit only)?"
 msgstr "kexec-tools yeniden başlatma işlerini idare etsin mi?"
 
 #. Type: boolean

@@ -1,3 +1,25 @@
+kexec-tools (1:2.0.10-2~bpo8+1) jessie-backports; urgency=medium
+
+  * Rebuild for jessie-backports.
+
+ -- Florian Schlichting <fsfs@debian.org>  Sat, 16 Apr 2016 01:00:52 +0200
+
+kexec-tools (1:2.0.10-2) unstable; urgency=medium
+
+  * Fix for systemd bug, many thanks to Thomas Stangner. systemd users
+    must use "systemctl kexec" for a kexec reboot (Closes: #785714)
+  * Added -f option to update-rc.d in preinstall script (Closes: #807018)
+  * Updated code for USE_GRUB_CONFIG to work with new grub.cfg format which
+    also is back to using entry number for saved_entry (Closes: #766367)
+  * Changed the location of flag file for cold reboot to a safer location
+    (Closes : #766772)
+  * Added mips64 and mips64el to supported arches (Closes: #800953,
+    Closes: #809220)
+  * Make the package build reproducibly (Closes: #783239)
+  * Add Brazilian Portuguese debconf templates translation (Closes: #811512)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 22 Mar 2016 17:27:30 -0600
+
 kexec-tools (1:2.0.10-1) unstable; urgency=medium
 
   * New upstream release (Closes: #791942)

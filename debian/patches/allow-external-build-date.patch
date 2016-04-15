@@ -1,0 +1,19 @@
+Description: Allow build date to be set externally
+ In order to allow the package to be built reproducibly, we can now
+ set the build date through the BUILD_DATE environment variable when
+ running ./configure.
+Author: Jérémy Bobbio <lunar@debian.org>
+--- a/configure.ac
++++ b/configure.ac
+@@ -10,7 +10,10 @@
+ AC_LANG(C)
+ AC_PROG_CC
+ 
+-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "`date '+%d %B %Y'`",
++if test "x$BUILD_DATE" = x; then
++	BUILD_DATE=`date '+%d %B %Y'`
++fi
++AC_DEFINE_UNQUOTED(PACKAGE_DATE, "$BUILD_DATE",
+ 		[Define to the release date of this package])
+ 
+ 

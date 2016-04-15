@@ -11,7 +11,7 @@
 ### END INIT INFO
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
-NOKEXECFILE=/tmp/no-kexec-reboot
+NOKEXECFILE=/no-kexec-reboot
 
 . /lib/lsb/init-functions
 
@@ -38,7 +38,7 @@ get_grub_kernel() {
 	mountpoint -q /boot && prefix=/boot || prefix=
 	data=$(cat /boot/grub/grub.cfg)
 
-	default=$(echo "$data" | awk '/^set default/ {print $2}' | cut -d'"' -f2)
+	default=$(echo "$data" | awk '/set default/ {print $2}' | cut -d'"' -f2 | tail -1)
 	if [ "$default" = '${saved_entry}' ]; then 
 		default=$(sed -ne 's/^saved_entry=//p' /boot/grub/grubenv)
 	fi
@@ -106,7 +106,7 @@ case "$1" in
 	# runlevel has been changed to 6 which indicates we are
 	# rebooting
 	if [ -d /run/systemd/system ]; then
-		systemctl list-jobs systemd-reboot.service | grep -q systemd-reboot.service
+		systemctl list-jobs systemd-kexec.service | grep -q systemd-kexec.service
 		if [ $? -ne 0 ]; then
 			exit 0
 		fi
