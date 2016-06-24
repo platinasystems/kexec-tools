@@ -1,3 +1,16 @@
+kexec-tools (1:2.0.12-1) unstable; urgency=medium
+
+  * New upstream release
+  * Upstream release no longer uses build date in version
+    (Closes: #783239)
+  * Fix kexec failures when compiled with gcc > v5 (Closes: #825189)
+  * Add support for scripts in /etc/defauls/kexec.d (Closes: #752790)
+  * Update japaneses translation (Closes: #819601)
+  * Update french translation (Closes: #821073)
+  * Update dutch translation (Closes: #821441)
+
+ -- Khalid Aziz <khalid@debian.org>  Fri, 24 Jun 2016 14:22:01 -0600
+
 kexec-tools (1:2.0.10-2) unstable; urgency=medium
 
   * Fix for systemd bug, many thanks to Thomas Stangner. systemd users

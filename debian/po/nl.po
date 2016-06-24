@@ -2,27 +2,28 @@
 # Copyright (C) 2011 THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the kexec-tools package.
 # Jeroen Schot <schot@a-eskwadraat.nl>, 2011.
+# Frans Spiesschaert <Frans.Spiesschaert@yucom.be>, 2016.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools 1:2.0.2-3\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-22 17:16-0600\n"
-"PO-Revision-Date: 2011-08-30 10:41+0200\n"
-"Last-Translator: Jeroen Schot <schot@a-eskwadraat.nl>\n"
-"Language-Team: Debian l10n Dutch <debian-l10n-dutch@lists.debian.org>\n"
+"PO-Revision-Date: 2016-04-01 18:25+0200\n"
+"Last-Translator: Frans Spiesschaert <Frans.Spiesschaert@yucom.be>\n"
+"Language-Team: Debian Dutch l10n Team <debian-l10n-dutch@lists.debian.org>\n"
 "Language: nl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Gtranslator 2.91.6\n"
 
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-#, fuzzy
-#| msgid "Should kexec-tools handle reboots?"
 msgid "Should kexec-tools handle reboots (sysvinit only)?"
-msgstr "Moet kexec-tools het herstarten afhandelen?"
+msgstr "Moet kexec-tools het herstarten afhandelen (enkel met sysvinit)?"
 
 #. Type: boolean
 #. Description

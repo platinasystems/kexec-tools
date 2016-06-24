@@ -15,6 +15,11 @@ PATH=/sbin:/bin
 . /lib/lsb/init-functions
 
 test -r /etc/default/kexec && . /etc/default/kexec
+if [ -d /etc/default/kexec.d ] ; then
+	for snippet in $(run-parts --list /etc/default/kexec.d) ; do
+		. "$snippet"
+	done
+fi
 
 do_stop () {
 	test "x`cat /sys/kernel/kexec_loaded`y" = "x1y" || exit 0

@@ -4,7 +4,7 @@ Homepage: http://kernel.org/pub/linux/utils/kernel/kexec/
 Priority: optional
 Maintainer: Khalid Aziz <khalid@debian.org>
 Build-Depends: debhelper (>= 7.0.0), dh-autoreconf, gnu-efi (>=3.0a-4)[ia64], libz-dev[ia64], po-debconf
-Standards-Version: 3.9.7
+Standards-Version: 3.9.8
 
 Package: kexec-tools
 Architecture: i386 amd64 ppc64el ppc64 powerpc powerpcspe  ia64 s390x arm armel armhf sh4 mips mipsel mips64 mips64el

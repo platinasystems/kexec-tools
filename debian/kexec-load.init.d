@@ -16,6 +16,11 @@ NOKEXECFILE=/no-kexec-reboot
 . /lib/lsb/init-functions
 
 test -r /etc/default/kexec && . /etc/default/kexec
+if [ -d /etc/default/kexec.d ] ; then
+	for snippet in $(run-parts --list /etc/default/kexec.d) ; do
+		. "$snippet"
+	done
+fi
 
 process_grub_entry() {
 	initrd_image=

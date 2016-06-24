@@ -136,6 +136,8 @@ struct memory_range {
 #define RANGE_ACPI	2
 #define RANGE_ACPI_NVS	3
 #define RANGE_UNCACHED	4
+#define RANGE_PMEM		6
+#define RANGE_PRAM		11
 };
 
 struct memory_ranges {
@@ -251,6 +253,7 @@ extern void die(const char *fmt, ...)
 extern void *xmalloc(size_t size);
 extern void *xrealloc(void *ptr, size_t size);
 extern char *slurp_file(const char *filename, off_t *r_size);
+extern char *slurp_file_mmap(const char *filename, off_t *r_size);
 extern char *slurp_file_len(const char *filename, off_t size, off_t *nread);
 extern char *slurp_decompress_file(const char *filename, off_t *r_size);
 extern unsigned long virt_to_phys(unsigned long addr);
@@ -286,7 +289,7 @@ int arch_process_options(int argc, char **argv);
 int arch_compat_trampoline(struct kexec_info *info);
 void arch_update_purgatory(struct kexec_info *info);
 int is_crashkernel_mem_reserved(void);
-int get_max_crash_kernel_limit(uint64_t *start, uint64_t *end);
+int get_crash_kernel_load_range(uint64_t *start, uint64_t *end);
 char *get_command_line(void);
 
 int kexec_iomem_for_each_line(char *match,

@@ -19,6 +19,7 @@
 
 #define _XOPEN_SOURCE	600
 #define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 
 #include <fcntl.h>
 #include <stddef.h>
@@ -42,6 +43,12 @@
 #ifdef HAVE_LIBXENCTRL
 #include <xenctrl.h>
 #endif /* HAVE_LIBXENCTRL */
+
+/* Used below but not present in (older?) xenctrl.h */
+#ifndef E820_PMEM
+#define E820_PMEM         7
+#define E820_PRAM         12
+#endif
 
 static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
@@ -93,6 +100,12 @@ static int get_memory_ranges_proc_iomem(struct memory_range **range, int *ranges
 		}
 		else if (memcmp(str, "ACPI Non-volatile Storage\n", 26) == 0) {
 			type = RANGE_ACPI_NVS;
+		}
+		else if (memcmp(str, "Persistent Memory (legacy)\n", 27) == 0) {
+			type = RANGE_PRAM;
+		}
+		else if (memcmp(str, "Persistent Memory\n", 18) == 0) {
+			type = RANGE_PMEM;
 		}
 		else {
 			continue;
@@ -149,6 +162,10 @@ unsigned xen_e820_to_kexec_type(uint32_t type)
 			return RANGE_ACPI;
 		case E820_NVS:
 			return RANGE_ACPI_NVS;
+		case E820_PMEM:
+			return RANGE_PMEM;
+		case E820_PRAM:
+			return RANGE_PRAM;
 		case E820_RESERVED:
 		default:
 			return RANGE_RESERVED;
@@ -361,9 +378,9 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 	    !(kexec_flags & KEXEC_PRESERVE_CONTEXT)) {
 		uint64_t start, end;
 
-		ret = get_max_crash_kernel_limit(&start, &end);
+		ret = get_crash_kernel_load_range(&start, &end);
 		if (ret != 0) {
-			fprintf(stderr, "get_max_crash_kernel_limit failed.\n");
+			fprintf(stderr, "get_crash_kernel_load_range failed.\n");
 			return -1;
 		}
 

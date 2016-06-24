@@ -1,14 +1,16 @@
-# kexec-tools debconf .
-# Copyright (C) 2008 Steve Petruzzello <dlist@debian.org>
+# Translation of kexec-tools debconf template to French
+# Copyright (C) 2016 Debian French l10n team <debian-l10n-french@lists.debian.org>
 # This file is distributed under the same license as the kexec-tools package.
-# Khalid Aziz <khalid@debian.org>
+#
+# Translator:
+# Steve Petruzzello <dlist@bluewin.ch>
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: kexec-tools_2.0.0-2\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-22 17:16-0600\n"
-"PO-Revision-Date: 2011-09-02 10:54+0200\n"
+"PO-Revision-Date: 2016-04-05 12:18+0200\n"
 "Last-Translator: Steve Petruzzello <dlist@bluewin.ch>\n"
 "Language-Team: French <debian-l10n-french@lists.debian.org>\n"
 "Language: fr\n"
@@ -19,10 +21,9 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-#, fuzzy
-#| msgid "Should kexec-tools handle reboots?"
 msgid "Should kexec-tools handle reboots (sysvinit only)?"
-msgstr "Faut-il gérer les redémarrages avec kexec-tools ?"
+msgstr ""
+"Faut-il gérer les redémarrages avec kexec-tools (seulement pour sysvinit) ?"
 
 #. Type: boolean
 #. Description
