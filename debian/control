@@ -7,8 +7,8 @@ Build-Depends: debhelper (>= 7.0.0), dh-autoreconf, gnu-efi (>=3.0a-4)[ia64], li
 Standards-Version: 3.9.8
 
 Package: kexec-tools
-Architecture: i386 amd64 ppc64el ppc64 powerpc powerpcspe  ia64 s390x arm armel armhf sh4 mips mipsel mips64 mips64el
-Depends: ${shlibs:Depends}, ${misc:Depends}, debconf
+Architecture: i386 amd64 ppc64el ppc64 powerpc powerpcspe  ia64 s390x arm arm64 armel armhf sh4 mips mipsel mips64 mips64el
+Depends: ${shlibs:Depends}, ${misc:Depends}, debconf, lsb-base (>=3.0-6)
 Description: tools to support fast kexec reboots
  This package provides tools to load a kernel into memory and then
  "reboot" directly into that kernel using the kexec system call,
@@ -16,7 +16,7 @@ Description: tools to support fast kexec reboots
 
 Package: kexec-tools-udeb
 Section: debian-installer
-Architecture: i386 amd64 ppc64el ppc64 powerpc powerpcspe  ia64 s390x arm armel armhf sh4 mips mipsel mips64 mips64el
+Architecture: i386 amd64 ppc64el ppc64 powerpc powerpcspe  ia64 s390x arm arm64 armel armhf sh4 mips mipsel mips64 mips64el
 XC-Package-Type: udeb
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Description: tools to support fast kexec reboots (udeb)

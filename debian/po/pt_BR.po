@@ -1,15 +1,15 @@
 # Debconf translations for kexec-tools.
 # Copyright (C) 2016 THE kexec-tools'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the kexec-tools package.
-# Adriano Rafael Gomes <adrianorg@arg.eti.br>, 2016.
+# Adriano Rafael Gomes <adrianorg@debian.org>, 2016-2017.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: kexec-tools 1:2.0.10-1\n"
+"Project-Id-Version: kexec-tools 1:2.0.12-1\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-22 17:16-0600\n"
-"PO-Revision-Date: 2016-01-04 20:39-0200\n"
-"Last-Translator: Adriano Rafael Gomes <adrianorg@arg.eti.br>\n"
+"PO-Revision-Date: 2017-01-11 15:34-0200\n"
+"Last-Translator: Adriano Rafael Gomes <adrianorg@debian.org>\n"
 "Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
 "org>\n"
 "Language: pt_BR\n"
@@ -20,10 +20,9 @@ msgstr ""
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-#, fuzzy
-#| msgid "Should kexec-tools handle reboots?"
 msgid "Should kexec-tools handle reboots (sysvinit only)?"
-msgstr "O kexec-tools deve controlar as reinicializações?"
+msgstr ""
+"O kexec-tools deve controlar as reinicializações (somente para sysvinit)?"
 
 #. Type: boolean
 #. Description

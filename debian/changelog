@@ -1,3 +1,18 @@
+kexec-tools (1:2.0.14-1) unstable; urgency=medium
+
+  * New upstream release
+  * Removed the patch lp1546260-fix-purgatory-fail-gcc5.patch which
+    has been accepted into this upstream version
+  * Updated Danish translation (Closes: #830594)
+  * Updated Brazilian Portuguese translation (Closes: #852445)
+  * Enabled build for arm64 (Closes: #791943)
+  * Fix FTCBFS: Invoke configure script through dh_auto_configure
+    in debian/rules (Closes: #850875)
+  * Added patch to add -fno-PIC to purgatory/arch/arm64/Makefile to
+    enable build on arm64
+
+ -- Khalid Aziz <khalid@debian.org>  Wed, 25 Jan 2017 12:36:57 -0700
+
 kexec-tools (1:2.0.12-1) unstable; urgency=medium
 
   * New upstream release

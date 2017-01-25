@@ -3,12 +3,19 @@
 
 #define OPT_ARCH_MAX	(OPT_MAX+0)
 #define OPT_APPEND	(OPT_ARCH_MAX+0)
+#define OPT_DTB		(OPT_ARCH_MAX+1)
+#define OPT_RAMDISK	(OPT_ARCH_MAX+2)
 
 /* Options relevant to the architecture (excluding loader-specific ones),
  * in this case none:
  */
 #define KEXEC_ARCH_OPTIONS \
 	KEXEC_OPTIONS \
+	{"command-line", 1, 0, OPT_APPEND}, \
+	{"append",	 1, 0, OPT_APPEND}, \
+	{"dtb",		1, 0, OPT_DTB }, \
+	{"initrd",	1, 0, OPT_RAMDISK },
+
 
 #define KEXEC_ARCH_OPT_STR KEXEC_OPT_STR ""
 
@@ -27,9 +34,7 @@
  * recognise -- as they now recognise (if not act upon) all possible options.
  */
 #define KEXEC_ALL_OPTIONS			\
-	KEXEC_ARCH_OPTIONS		       	\
-	{"command-line", 1, 0, OPT_APPEND},	\
-	{"append",	 1, 0, OPT_APPEND},
+	KEXEC_ARCH_OPTIONS
 
 #define KEXEC_ALL_OPT_STR KEXEC_ARCH_OPT_STR
 

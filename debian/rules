@@ -29,7 +29,7 @@ configure-stamp:
 	dh_testdir
 	# Add here commands to configure the package.
 	dh_autoreconf
-	CPPFLAGS="$(shell dpkg-buildflags --get CPPFLAGS)" CFLAGS="$(shell dpkg-buildflags --get CFLAGS)" LDFLAGS="$(shell dpkg-buildflags --get LDFLAGS)" ./configure --prefix=/usr --sbindir=/sbin --mandir=/usr/share/man --datadir=/usr/share
+	CPPFLAGS="$(shell dpkg-buildflags --get CPPFLAGS)" CFLAGS="$(shell dpkg-buildflags --get CFLAGS)" LDFLAGS="$(shell dpkg-buildflags --get LDFLAGS)" dh_auto_configure -- --prefix=/usr --sbindir=/sbin --mandir=/usr/share/man --datadir=/usr/share
 	touch configure-stamp
 
 

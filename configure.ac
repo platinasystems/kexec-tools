@@ -4,7 +4,7 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.12)
+AC_INIT(kexec-tools, 2.0.14)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
@@ -33,6 +33,9 @@ case $target_cpu in
 	powerpc64le )
 		ARCH="ppc64"
 		SUBARCH="LE"
+		;;
+	aarch64* )
+		ARCH="arm64"
 		;;
 	arm* )
 		ARCH="arm"

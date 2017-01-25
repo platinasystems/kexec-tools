@@ -6,4 +6,4 @@ coldreboot.patch
 linker-option.patch
 const_string_warning.patch
 powerpcspe_support.patch
-lp1546260-fix-purgatory-fail-gcc5.patch
+arm64_build.patch

@@ -29,13 +29,16 @@
 #include "kexec-mips.h"
 #include "crashdump-mips.h"
 #include <arch/options.h>
+#include "../../fs2dt.h"
+#include "../../dt-ops.h"
 
 static const int probe_debug = 0;
 
 #define BOOTLOADER         "kexec"
-#define MAX_COMMAND_LINE   256
 #define UPSZ(X) _ALIGN_UP(sizeof(X), 4)
-static char cmdline_buf[256] = "kexec ";
+
+#define CMDLINE_PREFIX "kexec "
+static char cmdline_buf[COMMAND_LINE_SIZE] = CMDLINE_PREFIX;
 
 int elf_mips_probe(const char *buf, off_t len)
 {
@@ -63,50 +66,22 @@ int elf_mips_probe(const char *buf, off_t len)
 
 void elf_mips_usage(void)
 {
-	printf("    --command-line=STRING Set the kernel command line to "
-			"STRING.\n"
-	       "    --append=STRING       Set the kernel command line to "
-			"STRING.\n");
 }
 
 int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
 	struct mem_ehdr ehdr;
-	const char *command_line;
-	int command_line_len;
+	int command_line_len = 0;
 	char *crash_cmdline;
-	int opt;
 	int result;
 	unsigned long cmdline_addr;
 	size_t i;
-
-	/* See options.h if adding any more options. */
-	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
-		{"command-line", 1, 0, OPT_APPEND},
-		{"append",       1, 0, OPT_APPEND},
-		{0, 0, 0, 0},
-	};
-
-	static const char short_options[] = KEXEC_ARCH_OPT_STR "d";
-
-	command_line = 0;
-	while ((opt = getopt_long(argc, argv, short_options,
-				  options, 0)) != -1) {
-		switch (opt) {
-		default:
-			/* Ignore core options */
-			if (opt < OPT_ARCH_MAX) {
-				break;
-			}
-		case OPT_APPEND:
-			command_line = optarg;
-			break;
-		}
-	}
-
-	command_line_len = 0;
+	off_t dtb_length;
+	char *dtb_buf;
+	char *initrd_buf = NULL;
+	unsigned long long kernel_addr = 0, kernel_size = 0;
+	unsigned long pagesize = getpagesize();
 
 	/* Need to append some command line parameters internally in case of
 	 * taking crash dumps.
@@ -125,8 +100,11 @@ int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct mem_phdr *phdr;
 		phdr = &ehdr.e_phdr[i];
-		if (phdr->p_type == PT_LOAD)
+		if (phdr->p_type == PT_LOAD) {
 			phdr->p_paddr = virt_to_phys(phdr->p_paddr);
+			kernel_addr = phdr->p_paddr;
+			kernel_size = phdr->p_memsz;
+		}
 	}
 
 	/* Load the Elf data */
@@ -136,8 +114,8 @@ int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 
 	info->entry = (void *)virt_to_phys(ehdr.e_entry);
 
-	if (command_line)
-		command_line_len = strlen(command_line) + 1;
+	if (arch_options.command_line)
+		command_line_len = strlen(arch_options.command_line) + 1;
 
 	if (info->kexec_flags & KEXEC_ON_CRASH) {
 		result = load_crashdump_segments(info, crash_cmdline,
@@ -148,8 +126,8 @@ int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 		}
 	}
 
-	if (command_line)
-		strncat(cmdline_buf, command_line, command_line_len);
+	if (arch_options.command_line)
+		strncat(cmdline_buf, arch_options.command_line, command_line_len);
 	if (crash_cmdline)
 		strncat(cmdline_buf, crash_cmdline,
 				sizeof(crash_cmdline) -
@@ -163,9 +141,45 @@ int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 	else
 		cmdline_addr = 0;
 
+	/* MIPS systems that have been converted to use device tree
+	 * passed through UHI will use commandline in the DTB and
+	 * the DTB passed as a separate buffer. Note that
+	 * CMDLINE_PREFIX is skipped here intentionally, as it is
+	 * used only in the legacy method */
+
+	if (arch_options.dtb_file) {
+		dtb_buf = slurp_file(arch_options.dtb_file, &dtb_length);
+	} else {
+		create_flatten_tree(&dtb_buf, &dtb_length, cmdline_buf + strlen(CMDLINE_PREFIX));
+	}
+
+	if (arch_options.initrd_file) {
+		initrd_buf = slurp_file(arch_options.initrd_file, &initrd_size);
+
+		/* Create initrd entries in dtb - although at this time
+		 * they would not point to the correct location */
+		dtb_set_initrd(&dtb_buf, &dtb_length, initrd_buf, initrd_buf + initrd_size);
+
+		initrd_base = add_buffer(info, initrd_buf, initrd_size,
+					initrd_size, sizeof(void *),
+					_ALIGN_UP(kernel_addr + kernel_size + dtb_length,
+						pagesize), 0x0fffffff, 1);
+
+		/* Now that the buffer for initrd is prepared, update the dtb
+		 * with an appropriate location */
+		dtb_set_initrd(&dtb_buf, &dtb_length, initrd_base, initrd_base + initrd_size);
+	}
+
+
+	/* This is a legacy method for commandline passing used
+	 * currently by Octeon CPUs only */
 	add_buffer(info, cmdline_buf, sizeof(cmdline_buf),
 			sizeof(cmdline_buf), sizeof(void *),
 			cmdline_addr, 0x0fffffff, 1);
+
+	add_buffer(info, dtb_buf, dtb_length, dtb_length, 0,
+		_ALIGN_UP(kernel_addr + kernel_size, pagesize),
+		0x0fffffff, 1);
 
 	return 0;
 }

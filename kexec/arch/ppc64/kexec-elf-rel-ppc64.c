@@ -5,17 +5,23 @@
 #include "../../kexec-elf.h"
 #include "kexec-ppc64.h"
 
-int machine_verify_elf_rel(struct mem_ehdr *ehdr)
-{
-	if (ehdr->ei_class != ELFCLASS64) {
-		return 0;
-	}
-	if (ehdr->e_machine != EM_PPC64) {
-		return 0;
-	}
+#if defined(_CALL_ELF) && _CALL_ELF == 2
+#define STO_PPC64_LOCAL_BIT	5
+#define STO_PPC64_LOCAL_MASK	(7 << STO_PPC64_LOCAL_BIT)
+#define PPC64_LOCAL_ENTRY_OFFSET(other) \
+ (((1 << (((other) & STO_PPC64_LOCAL_MASK) >> STO_PPC64_LOCAL_BIT)) >> 2) << 2)
 
-	return 1;
+static unsigned int local_entry_offset(struct mem_sym *sym)
+{
+	/* If this symbol has a local entry point, use it. */
+	return PPC64_LOCAL_ENTRY_OFFSET(sym->st_other);
 }
+#else
+static unsigned int local_entry_offset(struct mem_sym *UNUSED(sym))
+{
+	return 0;
+}
+#endif
 
 static struct mem_shdr *toc_section(const struct mem_ehdr *ehdr)
 {
@@ -32,6 +38,24 @@ static struct mem_shdr *toc_section(const struct mem_ehdr *ehdr)
 	}
 
 	return NULL;
+}
+
+int machine_verify_elf_rel(struct mem_ehdr *ehdr)
+{
+	struct mem_shdr *toc;
+
+	if (ehdr->ei_class != ELFCLASS64) {
+		return 0;
+	}
+	if (ehdr->e_machine != EM_PPC64) {
+		return 0;
+	}
+
+	/* Ensure .toc is sufficiently aligned.  */
+	toc = toc_section(ehdr);
+	if (toc && toc->sh_addralign < 256)
+		toc->sh_addralign = 256;
+	return 1;
 }
 
 /* r2 is the TOC pointer: it actually points 0x8000 into the TOC (this
@@ -63,8 +87,9 @@ static void do_relative_toc(unsigned long value, uint16_t *location,
 	*location = (*location & ~mask) | (value & mask);
 }
 
-void machine_apply_elf_rel(struct mem_ehdr *ehdr, unsigned long r_type,
-	void *location, unsigned long address, unsigned long value)
+void machine_apply_elf_rel(struct mem_ehdr *ehdr, struct mem_sym *sym,
+	unsigned long r_type, void *location, unsigned long address,
+	unsigned long value)
 {
 	switch(r_type) {
 	case R_PPC64_ADDR32:
@@ -113,6 +138,7 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, unsigned long r_type,
 		break;
 
 	case R_PPC64_REL24:
+		value += local_entry_offset(sym);
 		/* Convert value to relative */
 		value -= address;
 		if (value + 0x2000000 > 0x3ffffff || (value & 3) != 0) {
