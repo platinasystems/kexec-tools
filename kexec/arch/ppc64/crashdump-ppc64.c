@@ -36,6 +36,9 @@
 #include "../../fs2dt.h"
 #include "crashdump-ppc64.h"
 
+#define DEVTREE_CRASHKERNEL_BASE "/proc/device-tree/chosen/linux,crashkernel-base"
+#define DEVTREE_CRASHKERNEL_SIZE "/proc/device-tree/chosen/linux,crashkernel-size"
+
 static struct crash_elf_info elf_info64 =
 {
 	class: ELFCLASS64,
@@ -123,6 +126,7 @@ static void exclude_crash_region(uint64_t start, uint64_t end)
 static int get_dyn_reconf_crash_memory_ranges(void)
 {
 	uint64_t start, end;
+	uint64_t startrange, endrange;
 	char fname[128], buf[32];
 	FILE *file;
 	unsigned int i;
@@ -137,6 +141,7 @@ static int get_dyn_reconf_crash_memory_ranges(void)
 	}
 
 	fseek(file, 4, SEEK_SET);
+	startrange = endrange = 0;
 	for (i = 0; i < num_of_lmbs; i++) {
 		if ((n = fread(buf, 1, 24, file)) < 0) {
 			perror(fname);
@@ -162,8 +167,16 @@ static int get_dyn_reconf_crash_memory_ranges(void)
 		if ((flags & 0x80) || !(flags & 0x8))
 			continue;
 
-		exclude_crash_region(start, end);
+		if (start != endrange) {
+			if (startrange != endrange)
+				exclude_crash_region(startrange, endrange);
+			startrange = start;
+		}
+		endrange = end;
 	}
+	if (startrange != endrange)
+		exclude_crash_region(startrange, endrange);
+
 	fclose(file);
 	return 0;
 }
@@ -516,11 +529,28 @@ void add_usable_mem_rgns(unsigned long long base, unsigned long long size)
 		usablemem_rgns.size, base, size);
 }
 
+int get_crash_kernel_load_range(uint64_t *start, uint64_t *end)
+{
+	unsigned long long value;
+
+	if (!get_devtree_value(DEVTREE_CRASHKERNEL_BASE, &value))
+		*start = value;
+	else
+		return -1;
+
+	if (!get_devtree_value(DEVTREE_CRASHKERNEL_SIZE, &value))
+		*end = *start + value - 1;
+	else
+		return -1;
+
+	return 0;
+}
+
 int is_crashkernel_mem_reserved(void)
 {
 	int fd;
 
-	fd = open("/proc/device-tree/chosen/linux,crashkernel-base", O_RDONLY);
+	fd = open(DEVTREE_CRASHKERNEL_BASE, O_RDONLY);
 	if (fd < 0)
 		return 0;
 	close(fd);

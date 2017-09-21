@@ -1,3 +1,13 @@
+kexec-tools (1:2.0.15-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #876318, Closes: #854826)
+  * Enable compressed kernel support for ARM64 - Manoj Iyer
+    (Closes: #854093)
+  * Updated Portuguese translation (Closes: #857728)
+  * Updated German translation (Closes: #857737)
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 21 Sep 2017 15:07:18 -0600
+
 kexec-tools (1:2.0.14-1) unstable; urgency=medium
 
   * New upstream release

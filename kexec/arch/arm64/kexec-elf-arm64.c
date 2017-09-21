@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <linux/elf.h>
 
+#include "crashdump-arm64.h"
 #include "kexec-arm64.h"
 #include "kexec-elf.h"
 #include "kexec-syscall.h"
@@ -45,11 +46,6 @@ int elf_arm64_load(int argc, char **argv, const char *kernel_buf,
 	struct mem_ehdr ehdr;
 	int result;
 	int i;
-
-	if (info->kexec_flags & KEXEC_ON_CRASH) {
-		fprintf(stderr, "kexec: kdump not yet supported on arm64\n");
-		return -EFAILED;
-	}
 
 	result = build_elf_exec_info(kernel_buf, kernel_size, &ehdr, 0);
 
@@ -92,7 +88,7 @@ int elf_arm64_load(int argc, char **argv, const char *kernel_buf,
 
 	if (i == ehdr.e_phnum) {
 		dbgprintf("%s: Valid arm64 header not found\n", __func__);
-		result = -EFAILED;
+		result = EFAILED;
 		goto exit;
 	}
 
@@ -100,12 +96,13 @@ int elf_arm64_load(int argc, char **argv, const char *kernel_buf,
 
 	if (kernel_segment == ULONG_MAX) {
 		dbgprintf("%s: Kernel segment is not allocated\n", __func__);
-		result = -EFAILED;
+		result = EFAILED;
 		goto exit;
 	}
 
 	arm64_mem.vp_offset = _ALIGN_DOWN(ehdr.e_entry, MiB(2));
-	arm64_mem.vp_offset -= kernel_segment - get_phys_offset();
+	if (!(info->kexec_flags & KEXEC_ON_CRASH))
+		arm64_mem.vp_offset -= kernel_segment - get_phys_offset();
 
 	dbgprintf("%s: kernel_segment: %016lx\n", __func__, kernel_segment);
 	dbgprintf("%s: text_offset:    %016lx\n", __func__,
@@ -119,7 +116,24 @@ int elf_arm64_load(int argc, char **argv, const char *kernel_buf,
 	dbgprintf("%s: PE format:      %s\n", __func__,
 		(arm64_header_check_pe_sig(header) ? "yes" : "no"));
 
+	/* create and initialize elf core header segment */
+	if (info->kexec_flags & KEXEC_ON_CRASH) {
+		result = load_crashdump_segments(info);
+		if (result) {
+			dbgprintf("%s: Creating eflcorehdr failed.\n",
+								__func__);
+			goto exit;
+		}
+	}
+
 	/* load the kernel */
+	if (info->kexec_flags & KEXEC_ON_CRASH)
+		/*
+		 * offset addresses in elf header in order to load
+		 * vmlinux (elf_exec) into crash kernel's memory
+		 */
+		fixup_elf_addrs(&ehdr);
+
 	result = elf_exec_load(&ehdr, info);
 
 	if (result) {
@@ -127,6 +141,7 @@ int elf_arm64_load(int argc, char **argv, const char *kernel_buf,
 		goto exit;
 	}
 
+	/* load additional data */
 	result = arm64_load_other_segments(info, kernel_segment
 		+ arm64_mem.text_offset);
 

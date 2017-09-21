@@ -21,8 +21,17 @@
 #include "crashdump-arm64.h"
 #include "dt-ops.h"
 #include "fs2dt.h"
+#include "iomem.h"
 #include "kexec-syscall.h"
 #include "arch/options.h"
+
+#define ROOT_NODE_ADDR_CELLS_DEFAULT 1
+#define ROOT_NODE_SIZE_CELLS_DEFAULT 1
+
+#define PROP_ADDR_CELLS "#address-cells"
+#define PROP_SIZE_CELLS "#size-cells"
+#define PROP_ELFCOREHDR "linux,elfcorehdr"
+#define PROP_USABLE_MEM_RANGE "linux,usable-memory-range"
 
 /* Global varables the core kexec routines expect. */
 
@@ -40,6 +49,7 @@ const struct arch_map_entry arches[] = {
 struct file_type file_type[] = {
 	{"vmlinux", elf_arm64_probe, elf_arm64_load, elf_arm64_usage},
 	{"Image", image_arm64_probe, image_arm64_load, image_arm64_usage},
+	{"uImage", uImage_arm64_probe, uImage_arm64_load, uImage_arm64_usage},
 };
 
 int file_types = sizeof(file_type) / sizeof(file_type[0]);
@@ -77,7 +87,7 @@ int arm64_process_image_header(const struct arm64_image_header *h)
 #endif
 
 	if (!arm64_header_check_magic(h))
-		return -EFAILED;
+		return EFAILED;
 
 	if (h->image_size) {
 		arm64_mem.text_offset = arm64_header_text_offset(h);
@@ -126,9 +136,6 @@ int arch_process_options(int argc, char **argv)
 			break;
 		case OPT_INITRD:
 			arm64_opts.initrd = optarg;
-			break;
-		case OPT_PANIC:
-			die("load-panic (-p) not supported");
 			break;
 		default:
 			break; /* Ignore core and unknown options. */
@@ -200,7 +207,7 @@ static int set_bootargs(struct dtb *dtb, const char *command_line)
 	if (result) {
 		fprintf(stderr,
 			"kexec: Set device tree bootargs failed.\n");
-		return -EFAILED;
+		return EFAILED;
 	}
 
 	return 0;
@@ -220,7 +227,7 @@ static int read_proc_dtb(struct dtb *dtb)
 
 	if (result) {
 		dbgprintf("%s: %s\n", __func__, strerror(errno));
-		return -EFAILED;
+		return EFAILED;
 	}
 
 	dtb->path = path;
@@ -243,7 +250,7 @@ static int read_sys_dtb(struct dtb *dtb)
 
 	if (result) {
 		dbgprintf("%s: %s\n", __func__, strerror(errno));
-		return -EFAILED;
+		return EFAILED;
 	}
 
 	dtb->path = path;
@@ -273,31 +280,212 @@ static int read_1st_dtb(struct dtb *dtb)
 		goto on_success;
 
 	dbgprintf("%s: not found\n", __func__);
-	return -EFAILED;
+	return EFAILED;
 
 on_success:
 	dbgprintf("%s: found %s\n", __func__, dtb->path);
 	return 0;
 }
 
+static int get_cells_size(void *fdt, uint32_t *address_cells,
+						uint32_t *size_cells)
+{
+	int nodeoffset;
+	const uint32_t *prop = NULL;
+	int prop_len;
+
+	/* default values */
+	*address_cells = ROOT_NODE_ADDR_CELLS_DEFAULT;
+	*size_cells = ROOT_NODE_SIZE_CELLS_DEFAULT;
+
+	/* under root node */
+	nodeoffset = fdt_path_offset(fdt, "/");
+	if (nodeoffset < 0)
+		goto on_error;
+
+	prop = fdt_getprop(fdt, nodeoffset, PROP_ADDR_CELLS, &prop_len);
+	if (prop) {
+		if (prop_len == sizeof(*prop))
+			*address_cells = fdt32_to_cpu(*prop);
+		else
+			goto on_error;
+	}
+
+	prop = fdt_getprop(fdt, nodeoffset, PROP_SIZE_CELLS, &prop_len);
+	if (prop) {
+		if (prop_len == sizeof(*prop))
+			*size_cells = fdt32_to_cpu(*prop);
+		else
+			goto on_error;
+	}
+
+	dbgprintf("%s: #address-cells:%d #size-cells:%d\n", __func__,
+			*address_cells, *size_cells);
+	return 0;
+
+on_error:
+	return EFAILED;
+}
+
+static bool cells_size_fitted(uint32_t address_cells, uint32_t size_cells,
+						struct memory_range *range)
+{
+	dbgprintf("%s: %llx-%llx\n", __func__, range->start, range->end);
+
+	/* if *_cells >= 2, cells can hold 64-bit values anyway */
+	if ((address_cells == 1) && (range->start >= (1ULL << 32)))
+		return false;
+
+	if ((size_cells == 1) &&
+			((range->end - range->start + 1) >= (1ULL << 32)))
+		return false;
+
+	return true;
+}
+
+static void fill_property(void *buf, uint64_t val, uint32_t cells)
+{
+	uint32_t val32;
+	int i;
+
+	if (cells == 1) {
+		val32 = cpu_to_fdt32((uint32_t)val);
+		memcpy(buf, &val32, sizeof(uint32_t));
+	} else {
+		for (i = 0;
+		     i < (cells * sizeof(uint32_t) - sizeof(uint64_t)); i++)
+			*(char *)buf++ = 0;
+
+		val = cpu_to_fdt64(val);
+		memcpy(buf, &val, sizeof(uint64_t));
+	}
+}
+
+static int fdt_setprop_range(void *fdt, int nodeoffset,
+				const char *name, struct memory_range *range,
+				uint32_t address_cells, uint32_t size_cells)
+{
+	void *buf, *prop;
+	size_t buf_size;
+	int result;
+
+	buf_size = (address_cells + size_cells) * sizeof(uint32_t);
+	prop = buf = xmalloc(buf_size);
+
+	fill_property(prop, range->start, address_cells);
+	prop += address_cells * sizeof(uint32_t);
+
+	fill_property(prop, range->end - range->start + 1, size_cells);
+	prop += size_cells * sizeof(uint32_t);
+
+	result = fdt_setprop(fdt, nodeoffset, name, buf, buf_size);
+
+	free(buf);
+
+	return result;
+}
+
 /**
  * setup_2nd_dtb - Setup the 2nd stage kernel's dtb.
  */
 
-static int setup_2nd_dtb(struct dtb *dtb, char *command_line)
+static int setup_2nd_dtb(struct dtb *dtb, char *command_line, int on_crash)
 {
+	uint32_t address_cells, size_cells;
+	int range_len;
+	int nodeoffset;
+	char *new_buf = NULL;
+	int new_size;
 	int result;
 
 	result = fdt_check_header(dtb->buf);
 
 	if (result) {
 		fprintf(stderr, "kexec: Invalid 2nd device tree.\n");
-		return -EFAILED;
+		return EFAILED;
 	}
 
 	result = set_bootargs(dtb, command_line);
 
+	if (on_crash) {
+		/* determine #address-cells and #size-cells */
+		result = get_cells_size(dtb->buf, &address_cells, &size_cells);
+		if (result) {
+			fprintf(stderr,
+				"kexec: cannot determine cells-size.\n");
+			result = -EINVAL;
+			goto on_error;
+		}
+
+		if (!cells_size_fitted(address_cells, size_cells,
+					&elfcorehdr_mem)) {
+			fprintf(stderr,
+				"kexec: elfcorehdr doesn't fit cells-size.\n");
+			result = -EINVAL;
+			goto on_error;
+		}
+
+		if (!cells_size_fitted(address_cells, size_cells,
+					&crash_reserved_mem)) {
+			fprintf(stderr,
+				"kexec: usable memory range doesn't fit cells-size.\n");
+			result = -EINVAL;
+			goto on_error;
+		}
+
+		/* duplicate dt blob */
+		range_len = sizeof(uint32_t) * (address_cells + size_cells);
+		new_size = fdt_totalsize(dtb->buf)
+			+ fdt_prop_len(PROP_ELFCOREHDR, range_len)
+			+ fdt_prop_len(PROP_USABLE_MEM_RANGE, range_len);
+
+		new_buf = xmalloc(new_size);
+		result = fdt_open_into(dtb->buf, new_buf, new_size);
+		if (result) {
+			dbgprintf("%s: fdt_open_into failed: %s\n", __func__,
+				fdt_strerror(result));
+			result = -ENOSPC;
+			goto on_error;
+		}
+
+		/* add linux,elfcorehdr */
+		nodeoffset = fdt_path_offset(new_buf, "/chosen");
+		result = fdt_setprop_range(new_buf, nodeoffset,
+				PROP_ELFCOREHDR, &elfcorehdr_mem,
+				address_cells, size_cells);
+		if (result) {
+			dbgprintf("%s: fdt_setprop failed: %s\n", __func__,
+				fdt_strerror(result));
+			result = -EINVAL;
+			goto on_error;
+		}
+
+		/* add linux,usable-memory-range */
+		nodeoffset = fdt_path_offset(new_buf, "/chosen");
+		result = fdt_setprop_range(new_buf, nodeoffset,
+				PROP_USABLE_MEM_RANGE, &crash_reserved_mem,
+				address_cells, size_cells);
+		if (result) {
+			dbgprintf("%s: fdt_setprop failed: %s\n", __func__,
+				fdt_strerror(result));
+			result = -EINVAL;
+			goto on_error;
+		}
+
+		fdt_pack(new_buf);
+		dtb->buf = new_buf;
+		dtb->size = fdt_totalsize(new_buf);
+	}
+
 	dump_reservemap(dtb);
+
+
+	return result;
+
+on_error:
+	fprintf(stderr, "kexec: %s failed.\n", __func__);
+	if (new_buf)
+		free(new_buf);
 
 	return result;
 }
@@ -306,12 +494,27 @@ unsigned long arm64_locate_kernel_segment(struct kexec_info *info)
 {
 	unsigned long hole;
 
-	hole = locate_hole(info,
-		arm64_mem.text_offset + arm64_mem.image_size,
-		MiB(2), 0, ULONG_MAX, 1);
+	if (info->kexec_flags & KEXEC_ON_CRASH) {
+		unsigned long hole_end;
 
-	if (hole == ULONG_MAX)
-		dbgprintf("%s: locate_hole failed\n", __func__);
+		hole = (crash_reserved_mem.start < mem_min ?
+				mem_min : crash_reserved_mem.start);
+		hole = _ALIGN_UP(hole, MiB(2));
+		hole_end = hole + arm64_mem.text_offset + arm64_mem.image_size;
+
+		if ((hole_end > mem_max) ||
+		    (hole_end > crash_reserved_mem.end)) {
+			dbgprintf("%s: Crash kernel out of range\n", __func__);
+			hole = ULONG_MAX;
+		}
+	} else {
+		hole = locate_hole(info,
+			arm64_mem.text_offset + arm64_mem.image_size,
+			MiB(2), 0, ULONG_MAX, 1);
+
+		if (hole == ULONG_MAX)
+			dbgprintf("%s: locate_hole failed\n", __func__);
+	}
 
 	return hole;
 }
@@ -347,19 +550,23 @@ int arm64_load_other_segments(struct kexec_info *info,
 		if (result) {
 			fprintf(stderr,
 				"kexec: Error: No device tree available.\n");
-			return -EFAILED;
+			return EFAILED;
 		}
 	}
 
-	result = setup_2nd_dtb(&dtb, command_line);
+	result = setup_2nd_dtb(&dtb, command_line,
+			info->kexec_flags & KEXEC_ON_CRASH);
 
 	if (result)
-		return -EFAILED;
+		return EFAILED;
 
 	/* Put the other segments after the image. */
 
 	hole_min = image_base + arm64_mem.image_size;
-	hole_max = ULONG_MAX;
+	if (info->kexec_flags & KEXEC_ON_CRASH)
+		hole_max = crash_reserved_mem.end;
+	else
+		hole_max = ULONG_MAX;
 
 	if (arm64_opts.initrd) {
 		initrd_buf = slurp_file(arm64_opts.initrd, &initrd_size);
@@ -382,7 +589,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 
 			if (_ALIGN_UP(initrd_end, GiB(1)) - _ALIGN_DOWN(image_base, GiB(1)) > GiB(32)) {
 				fprintf(stderr, "kexec: Error: image + initrd too big.\n");
-				return -EFAILED;
+				return EFAILED;
 			}
 
 			dbgprintf("initrd: base %lx, size %lxh (%ld)\n",
@@ -393,7 +600,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 				initrd_base + initrd_size);
 
 			if (result)
-				return -EFAILED;
+				return EFAILED;
 		}
 	}
 
@@ -401,7 +608,7 @@ int arm64_load_other_segments(struct kexec_info *info,
 
 	if (dtb.size > MiB(2)) {
 		fprintf(stderr, "kexec: Error: dtb too big.\n");
-		return -EFAILED;
+		return EFAILED;
 	}
 
 	dtb_base = add_buffer_phys_virt(info, dtb.buf, dtb.size, dtb.size,
@@ -476,7 +683,14 @@ static int get_memory_ranges_iomem_cb(void *data, int nr, char *str,
 		return -1;
 
 	r = (struct memory_range *)data + nr;
-	r->type = RANGE_RAM;
+
+	if (!strncmp(str, SYSTEM_RAM, strlen(SYSTEM_RAM)))
+		r->type = RANGE_RAM;
+	else if (!strncmp(str, IOMEM_RESERVED, strlen(IOMEM_RESERVED)))
+		r->type = RANGE_RESERVED;
+	else
+		return 1;
+
 	r->start = base;
 	r->end = base + length - 1;
 
@@ -495,12 +709,12 @@ static int get_memory_ranges_iomem_cb(void *data, int nr, char *str,
 static int get_memory_ranges_iomem(struct memory_range *array,
 	unsigned int *count)
 {
-	*count = kexec_iomem_for_each_line("System RAM\n",
+	*count = kexec_iomem_for_each_line(NULL,
 		get_memory_ranges_iomem_cb, array);
 
 	if (!*count) {
 		dbgprintf("%s: failed: No RAM found.\n", __func__);
-		return -EFAILED;
+		return EFAILED;
 	}
 
 	return 0;

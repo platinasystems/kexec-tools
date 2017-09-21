@@ -9,14 +9,3 @@
  	$(RM) -f include/config.h.in configure $(SPEC)
  	$(RM) -rf autom4te.cache
  
---- a/purgatory/Makefile
-+++ b/purgatory/Makefile
-@@ -33,7 +33,7 @@ PURGATORY_SRCS+=$($(ARCH)_PURGATORY_SRCS
- PURGATORY_OBJS = $(call objify, $(PURGATORY_SRCS)) purgatory/sha256.o
- PURGATORY_DEPS = $(call depify, $(PURGATORY_OBJS))
- 
--clean += $(PURGATORY_OBJS) $(PURGATORY_DEPS) $(PURGATORY)
-+clean += $(PURGATORY_OBJS) $(PURGATORY_DEPS) $(PURGATORY) purgatory/purgatory.ro.sym $(PURGATORY_MAP)
- 
- -include $(PURGATORY_DEPS)
- 

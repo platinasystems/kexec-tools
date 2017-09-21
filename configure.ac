@@ -4,7 +4,7 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.14)
+AC_INIT(kexec-tools, 2.0.15)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
@@ -167,6 +167,12 @@ if test "$with_xen" = yes ; then
 	AC_CHECK_HEADER(xenctrl.h,
 		[AC_CHECK_LIB(xenctrl, xc_kexec_load, ,
 		AC_MSG_NOTICE([Xen support disabled]))])
+		if test "$ac_cv_lib_xenctrl_xc_kexec_load" = yes ; then
+			AC_CHECK_LIB(xenctrl, xc_kexec_status,
+				AC_DEFINE(HAVE_KEXEC_CMD_STATUS, 1,
+					[The kexec_status call is available]),
+				AC_MSG_NOTICE([The kexec_status call is not available]))
+		fi
 fi
 
 dnl ---Sanity checks

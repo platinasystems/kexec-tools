@@ -24,7 +24,7 @@
  *
  * Returns 0 if this is not a uImage
  */
-int uImage_probe(const unsigned char *buf, off_t len, unsigned int arch)
+int uImage_probe(const char *buf, off_t len, unsigned int arch)
 {
 	struct image_header header;
 #ifdef HAVE_LIBZ
@@ -109,7 +109,7 @@ int uImage_probe(const unsigned char *buf, off_t len, unsigned int arch)
  *  1		- If the image is not a uImage.
  */
 
-int uImage_probe_kernel(const unsigned char *buf, off_t len, unsigned int arch)
+int uImage_probe_kernel(const char *buf, off_t len, unsigned int arch)
 {
 	int type = uImage_probe(buf, len, arch);
 	if (type < 0)
@@ -118,7 +118,7 @@ int uImage_probe_kernel(const unsigned char *buf, off_t len, unsigned int arch)
 	return !(type == IH_TYPE_KERNEL || type == IH_TYPE_KERNEL_NOLOAD);
 }
 
-int uImage_probe_ramdisk(const unsigned char *buf, off_t len, unsigned int arch)
+int uImage_probe_ramdisk(const char *buf, off_t len, unsigned int arch)
 {
 	int type = uImage_probe(buf, len, arch);
 
@@ -136,7 +136,7 @@ int uImage_probe_ramdisk(const unsigned char *buf, off_t len, unsigned int arch)
 #define COMMENT		0x10 /* bit 4 set: file comment present */
 #define RESERVED	0xE0 /* bits 5..7: reserved */
 
-static int uImage_gz_load(const unsigned char *buf, off_t len,
+static int uImage_gz_load(const char *buf, off_t len,
 		struct Image_info *image)
 {
 	int ret;
@@ -210,9 +210,9 @@ static int uImage_gz_load(const unsigned char *buf, off_t len,
 				return -1;
 			}
 
+			uncomp_buf = new_buf;
 			strm.next_out = uncomp_buf + mem_alloc - inc_buf;
 			strm.avail_out = inc_buf;
-			uncomp_buf = new_buf;
 		} else {
 			printf("Error during decompression %d\n", ret);
 			return -1;
@@ -220,23 +220,23 @@ static int uImage_gz_load(const unsigned char *buf, off_t len,
 	} while (1);
 
 	inflateEnd(&strm);
-	image->buf = uncomp_buf;
+	image->buf = (char *)uncomp_buf;
 	image->len = mem_alloc - strm.avail_out;
 	return 0;
 }
 #else
-static int uImage_gz_load(const unsigned char *UNUSED(buf), off_t UNUSED(len),
+static int uImage_gz_load(const char *UNUSED(buf), off_t UNUSED(len),
 		struct Image_info *UNUSED(image))
 {
 	return -1;
 }
 #endif
 
-int uImage_load(const unsigned char *buf, off_t len, struct Image_info *image)
+int uImage_load(const char *buf, off_t len, struct Image_info *image)
 {
 	const struct image_header *header = (const struct image_header *)buf;
-	const unsigned char *img_buf = buf + sizeof(struct image_header);
-	off_t img_len = header->ih_size;
+	const char *img_buf = buf + sizeof(struct image_header);
+	off_t img_len = be32_to_cpu(header->ih_size);
 
 	/*
 	 * Prevent loading a modified image.

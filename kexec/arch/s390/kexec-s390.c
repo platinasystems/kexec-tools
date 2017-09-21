@@ -170,7 +170,7 @@ int get_memory_ranges_s390(struct memory_range memory_range[], int *ranges,
 		if (current_range == MAX_MEMORY_RANGES)
 			break;
 
-		sscanf(line,"%Lx-%Lx : %n", &start, &end, &cons);
+		sscanf(line,"%llx-%llx : %n", &start, &end, &cons);
 		str = line+cons;
 		if ((memcmp(str, sys_ram, strlen(sys_ram)) == 0) ||
 		    ((memcmp(str, crash_kernel, strlen(crash_kernel)) == 0) &&
@@ -261,4 +261,9 @@ int is_crashkernel_mem_reserved(void)
 
 	return parse_iomem_single("Crash kernel\n", &start, &end) == 0 ?
 		(start != end) : 0;
+}
+
+int get_crash_kernel_load_range(uint64_t *start, uint64_t *end)
+{
+	return parse_iomem_single("Crash kernel\n", start, end);
 }

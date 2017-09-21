@@ -1,14 +1,14 @@
 # German translation of the kexec-tools debconf template
 # Copyright 2008 Kai Wasserbäch <debian@carbon-project.org>
-# Copyright 2011 Helge Kreutzmann <debian@helgefjell.de>
+# Copyright 2011,2017 Helge Kreutzmann <debian@helgefjell.de>
 # This file is distributed under the same license as the kexec-tools package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: kexec-tools 20080324-1\n"
+"Project-Id-Version: kexec-tools 1:2.0.14-1\n"
 "Report-Msgid-Bugs-To: kexec-tools@packages.debian.org\n"
 "POT-Creation-Date: 2016-03-22 17:16-0600\n"
-"PO-Revision-Date: 2011-09-10 20:36+0200\n"
+"PO-Revision-Date: 2017-03-10 21:15+0100\n"
 "Last-Translator: Helge Kreutzmann <debian@helgefjell.de>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
 "Language: de\n"
@@ -17,13 +17,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms:  nplurals=2; plural=(n != 1);\n"
 
+#, new
 #. Type: boolean
 #. Description
 #: ../kexec-tools.templates:2001
-#, fuzzy
-#| msgid "Should kexec-tools handle reboots?"
 msgid "Should kexec-tools handle reboots (sysvinit only)?"
-msgstr "Soll »kexec-tools« Neustarts verwalten?"
+msgstr "Soll »kexec-tools« Neustarts verwalten? (Nur SysvInit)"
 
 #. Type: boolean
 #. Description
