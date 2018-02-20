@@ -27,6 +27,7 @@ case "$1" in
         ;;
        remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
 
+		dpkg-maintscript-helper rm_conffile /etc/default/kexec 1:2.0.16-1 -- "$@"
 
         ;;
 

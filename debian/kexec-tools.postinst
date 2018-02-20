@@ -42,6 +42,10 @@ case "$1" in
 	fi
     ;;
 
+    install|upgrade)
+	dpkg-maintscript-helper rm_conffile /etc/default/kexec 1:2.0.16-1 -- "$@"
+    ;;
+
     abort-upgrade|abort-remove|abort-deconfigure)
     exit 0	
     ;;
@@ -54,7 +58,7 @@ esac
 
 # Handle debconf
 . /usr/share/debconf/confmodule
-                                                                                                                              
+
 INITCONFFILE=/etc/default/kexec
  
 # We generate several files during the postinst, and we don't want

@@ -1,3 +1,12 @@
+kexec-tools (1:2.0.16-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #890818)
+  * Updated pointer to kexec-tools home page (Closes: #888565)
+  * Updtaed russian translation (Thanks, Lev) (Closes: #883918)
+  * Remove obsolete configuration file (Closes: #868100)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 20 Feb 2018 11:13:24 -0700
+
 kexec-tools (1:2.0.15-1) unstable; urgency=medium
 
   * New upstream release (Closes: #876318, Closes: #854826)

@@ -74,7 +74,10 @@ static int get_kernel_vaddr_and_size(struct crash_elf_info *elf_info,
 
 	elf_info->kern_vaddr_start = elf_info->kern_paddr_start |
 					start_offset;
-	if (parse_iomem_single("Kernel data\n", NULL, &end) == 0) {
+	/* If "Kernel bss" exists, the kernel ends there, else fall
+	 *  through and say that it ends at "Kernel data" */
+	if (parse_iomem_single("Kernel bss\n", NULL, &end) == 0 ||
+	    parse_iomem_single("Kernel data\n", NULL, &end) == 0) {
 		elf_info->kern_size = end - elf_info->kern_paddr_start;
 		dbgprintf("kernel_vaddr= 0x%llx paddr %llx\n",
 				elf_info->kern_vaddr_start,
@@ -201,7 +204,7 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 		memory_ranges++;
 
 		/* Segregate linearly mapped region. */
-		if ((MAXMEM - 1) >= start && (MAXMEM - 1) <= end) {
+		if (MAXMEM && (MAXMEM - 1) >= start && (MAXMEM - 1) <= end) {
 			crash_memory_range[memory_ranges - 1].end = MAXMEM - 1;
 
 			/* Add segregated region. */
@@ -304,7 +307,7 @@ static struct crash_elf_info elf_info64 = {
 	data : ELFDATALOCAL,
 	machine : EM_MIPS,
 	page_offset : PAGE_OFFSET,
-	lowmem_limit : MAXMEM,
+	lowmem_limit : 0, /* 0 == no limit */
 };
 
 static struct crash_elf_info elf_info32 = {
@@ -314,6 +317,30 @@ static struct crash_elf_info elf_info32 = {
 	page_offset : PAGE_OFFSET,
 	lowmem_limit : MAXMEM,
 };
+
+static int patch_elf_info(void)
+{
+	const char cpuinfo[] = "/proc/cpuinfo";
+	char line[MAX_LINE];
+	FILE *fp;
+
+	fp = fopen(cpuinfo, "r");
+	if (!fp) {
+		fprintf(stderr, "Cannot open %s: %s\n",
+			cpuinfo, strerror(errno));
+		return -1;
+	}
+	while (fgets(line, sizeof(line), fp) != 0) {
+		if (strncmp(line, "cpu model", 9) == 0) {
+			/* OCTEON uses a different page_offset. */
+			if (strstr(line, "Octeon"))
+				elf_info64.page_offset = 0x8000000000000000ULL;
+			break;
+		}
+	}
+	fclose(fp);
+	return 0;
+}
 
 /* Loads additional segments in case of a panic kernel is being loaded.
  * One segment for backup region, another segment for storing elf headers
@@ -330,6 +357,9 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	crash_create_elf_headers_func crash_create = crash_create_elf32_headers;
 	struct crash_elf_info *elf_info = &elf_info32;
 	unsigned long start_offset = 0x80000000UL;
+
+	if (patch_elf_info())
+		return -1;
 
 	if (arch_options.core_header_type == CORE_TYPE_ELF64) {
 		elf_info = &elf_info64;
