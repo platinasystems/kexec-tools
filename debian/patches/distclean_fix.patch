@@ -1,6 +1,6 @@
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -231,7 +231,7 @@ clean:
+@@ -238,7 +238,7 @@ clean:
  distclean: dist-clean
  
  dist-clean: clean

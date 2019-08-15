@@ -43,7 +43,6 @@ case "$1" in
     ;;
 
     install|upgrade)
-	dpkg-maintscript-helper rm_conffile /etc/default/kexec 1:2.0.16-1 -- "$@"
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
@@ -127,7 +126,6 @@ else
 	db_set kexec-tools/use_grub_config "false"
 fi
 update_param USE_GRUB_CONFIG
-db_stop
                                                                                                                               
 # ------------------------- Debconf questions end ---------------------
 

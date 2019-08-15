@@ -5,4 +5,3 @@ add_debian_readme.patch
 coldreboot.patch
 linker-option.patch
 powerpcspe_support.patch
-arm64_build.patch

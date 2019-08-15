@@ -1,3 +1,17 @@
+kexec-tools (1:2.0.18-1~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+
+ -- Aron Xu <aron@debian.org>  Thu, 15 Aug 2019 09:08:15 +0000
+
+kexec-tools (1:2.0.18-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #905656)
+  * Removed patch arm64_build.patch since the bug is fixed in upstream now
+  * Remnoved call to db_stop in kexec-tools.postinst (Closes: #891256)
+
+ -- Khalid Aziz <khalid@debian.org>  Tue, 22 Jan 2019 14:46:13 -0700
+
 kexec-tools (1:2.0.16-1) unstable; urgency=medium
 
   * New upstream release (Closes: #890818)

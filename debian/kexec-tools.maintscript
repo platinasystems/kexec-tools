@@ -1,0 +1,6 @@
+#! /bin/sh
+# maintainer script for kexec-tools
+#
+# see: dh_installdeb(1)
+
+rm_conffile /etc/default/kexec 1:2.0.16-1

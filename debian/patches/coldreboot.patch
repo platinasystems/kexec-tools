@@ -1,23 +1,29 @@
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -178,11 +178,13 @@
+@@ -173,9 +173,11 @@ PSRCS:=$(foreach s, $(SRCS), $(PACKAGE_N
  PGSRCS:=$(foreach s, $(GENERATED_SRCS), $(PACKAGE_NAME)-$(PACKAGE_VERSION)/$(s))
  
- MAN_PAGES:=$(KEXEC_MANPAGE) $(KDUMP_MANPAGE) $(VMCORE_DMESG_MANPAGE)
-+MAN_PAGES+= $(MANDIR)/man8/coldreboot.8
+ MAN_PAGES:=$(KEXEC_MANPAGE) $(VMCORE_DMESG_MANPAGE)
++MAN_PAGES+=$(MANDIR)/man8/coldreboot.8
  BINARIES_i386:=$(KEXEC_TEST)
  BINARIES_x86_64:=$(KEXEC_TEST)
- BINARIES:=$(KEXEC) $(KDUMP) $(VMCORE_DMESG) $(BINARIES_$(ARCH))
+ BINARIES:=$(KEXEC) $(VMCORE_DMESG) $(BINARIES_$(ARCH))
 +SCRIPTS:=$(SBINDIR)/coldreboot
+ 
+ UNINSTALL_KDUMP = $(sbindir)/kdump
+ UNINSTALL_KDUMP_MANPAGE = $(mandir)/man8/kdump.8
+@@ -184,7 +186,7 @@ UNINSTALL_KEXEC_MANPAGE = $(mandir)/man8
+ UNINSTALL_VMCORE_DMESG = $(sbindir)/vmcore-dmesg
+ UNINSTALL_VMCORE_DMESG_MANPAGE = $(mandir)/man8/vmcore-dmesg.8
  
 -TARGETS:=$(BINARIES) $(MAN_PAGES)
 +TARGETS:=$(BINARIES) $(MAN_PAGES) $(SCRIPTS)
- 
  targets: $(TARGETS)
  
+ UNINSTALL_TARGETS:=$(UNINSTALL_KDUMP) $(UNINSTALL_KDUMP_MANPAGE) \
 --- a/kexec/Makefile
 +++ b/kexec/Makefile
-@@ -92,6 +92,8 @@
+@@ -103,6 +103,8 @@ clean += $(KEXEC_OBJS) $(KEXEC_DEPS) $(K
  
  KEXEC = $(SBINDIR)/kexec
  KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
@@ -26,7 +32,7 @@
  
  -include $(KEXEC_DEPS)
  
-@@ -106,6 +108,16 @@
+@@ -117,6 +119,16 @@ kexec/fs2dt.o: CPPFLAGS+=$($(ARCH)_FS2DT
  $(KEXEC_MANPAGE): kexec/kexec.8
  	@$(MKDIR) -p     $(MANDIR)/man8
  	cp $^ $(KEXEC_MANPAGE)

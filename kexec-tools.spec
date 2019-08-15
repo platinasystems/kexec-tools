@@ -1,6 +1,6 @@
 Summary: Load one kernel from another
 Name: kexec-tools
-Version: 2.0.16
+Version: 2.0.18
 Release: 0
 License: GPL
 Group: Development/Tools
@@ -30,13 +30,11 @@ make install DESTDIR=${RPM_BUILD_ROOT}
 %files
 %defattr(-,root,root)
 %{_sbindir}/kexec
-%{_sbindir}/kdump
 %{_sbindir}/vmcore-dmesg
 %doc News
 %doc COPYING
 %doc TODO
 %{_mandir}/man8/kexec.8.gz
-%{_mandir}/man8/kdump.8.gz
 %{_mandir}/man8/vmcore-dmesg.8.gz
 
 %changelog

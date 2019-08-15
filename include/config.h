@@ -4,20 +4,26 @@
 /* Define to build for BookE */
 /* #undef CONFIG_BOOKE */
 
+/* Define to 1 to link libxenctrl.so at run-time rather than build-time */
+/* #undef CONFIG_LIBXENCTRL_DL */
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
 /* The kexec_status call is available */
 /* #undef HAVE_KEXEC_CMD_STATUS */
 
+/* Define to 1 if you have the `dl' library (-ldl). */
+/* #undef HAVE_LIBDL */
+
 /* Define to 1 if you have the `lzma' library (-llzma). */
 /* #undef HAVE_LIBLZMA */
 
 /* Define to 1 if you have the `xenctrl' library (-lxenctrl). */
-/* #undef HAVE_LIBXENCTRL */
+#define HAVE_LIBXENCTRL 1
 
 /* Define to 1 if you have the `z' library (-lz). */
-/* #undef HAVE_LIBZ */
+#define HAVE_LIBZ 1
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -50,7 +56,7 @@
 #define PACKAGE_NAME "kexec-tools"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kexec-tools 2.0.16"
+#define PACKAGE_STRING "kexec-tools 2.0.18"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kexec-tools"
@@ -59,7 +65,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.16"
+#define PACKAGE_VERSION "2.0.18"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1

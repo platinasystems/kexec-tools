@@ -3,11 +3,17 @@
 /* Define to build for BookE */
 #undef CONFIG_BOOKE
 
+/* Define to 1 to link libxenctrl.so at run-time rather than build-time */
+#undef CONFIG_LIBXENCTRL_DL
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
 /* The kexec_status call is available */
 #undef HAVE_KEXEC_CMD_STATUS
+
+/* Define to 1 if you have the `dl' library (-ldl). */
+#undef HAVE_LIBDL
 
 /* Define to 1 if you have the `lzma' library (-llzma). */
 #undef HAVE_LIBLZMA
