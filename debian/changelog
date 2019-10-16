@@ -1,3 +1,11 @@
+kexec-tools (1:2.0.20-1) unstable; urgency=medium
+
+  * New upstream release
+  * Dropped additional unnecessary defaults setting in postinst
+    (Closes: #921023)
+
+ -- Khalid Aziz <khalid@debian.org>  Wed, 16 Oct 2019 10:49:02 -0600
+
 kexec-tools (1:2.0.18-1) unstable; urgency=medium
 
   * New upstream release (Closes: #905656)

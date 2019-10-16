@@ -123,7 +123,6 @@ void setup_linux_bootloader_parameters_high(
 	cmdline_ptr[cmdline_len - 1] = '\0';
 }
 
-static int get_bootparam(void *buf, off_t offset, size_t size);
 static int setup_linux_vesafb(struct x86_linux_param_header *real_mode)
 {
 	struct fb_fix_screeninfo fix;
@@ -144,7 +143,7 @@ static int setup_linux_vesafb(struct x86_linux_param_header *real_mode)
 	} else if (0 == strcmp(fix.id, "EFI VGA")) {
 		/* VIDEO_TYPE_EFI */
 		real_mode->orig_video_isVGA = 0x70;
-	} else {
+	} else if (arch_options.reuse_video_type) {
 		int err;
 		off_t offset = offsetof(typeof(*real_mode), orig_video_isVGA);
 
@@ -152,15 +151,24 @@ static int setup_linux_vesafb(struct x86_linux_param_header *real_mode)
 		err = get_bootparam(&real_mode->orig_video_isVGA, offset, 1);
 		if (err)
 			goto out;
+	} else {
+		real_mode->orig_video_isVGA = 0;
+		close(fd);
+		return 0;
 	}
 	close(fd);
 
 	real_mode->lfb_width      = var.xres;
 	real_mode->lfb_height     = var.yres;
 	real_mode->lfb_depth      = var.bits_per_pixel;
-	real_mode->lfb_base       = fix.smem_start;
+	real_mode->lfb_base       = fix.smem_start & 0xffffffffUL;
 	real_mode->lfb_linelength = fix.line_length;
 	real_mode->vesapm_seg     = 0;
+
+	if (fix.smem_start > 0xffffffffUL) {
+		real_mode->ext_lfb_base = fix.smem_start >> 32;
+		real_mode->capabilities |= VIDEO_CAPABILITY_64BIT_BASE;
+	}
 
 	/* FIXME: better get size from the file returned by proc_iomem() */
 	real_mode->lfb_size       = (fix.smem_len + 65535) / 65536;
@@ -423,19 +431,27 @@ out:
 /*
  * This really only makes sense for virtual filesystems that are only expected
  * to be mounted once (sysfs, debugsfs, proc), as it will return the first
- * instance listed in mtab.
+ * instance listed in /proc/mounts, falling back to mtab if absent.
+ * We search by type and not by name because the name can be anything;
+ * while setting the name equal to the mount point is common, it cannot be
+ * relied upon, as even kernel documentation examples recommends using
+ * "none" as the name e.g. for debugfs.
  */
-char *find_mnt_by_fsname(char *fsname)
+char *find_mnt_by_type(char *type)
 {
 	FILE *mtab;
 	struct mntent *mnt;
 	char *mntdir;
 
-	mtab = setmntent("/etc/mtab", "r");
+	mtab = setmntent("/proc/mounts", "r");
+	if (!mtab) {
+		// Fall back to mtab
+		mtab = setmntent("/etc/mtab", "r");
+	}
 	if (!mtab)
 		return NULL;
 	for(mnt = getmntent(mtab); mnt; mnt = getmntent(mtab)) {
-		if (strcmp(mnt->mnt_fsname, fsname) == 0)
+		if (strcmp(mnt->mnt_type, type) == 0)
 			break;
 	}
 	mntdir = mnt ? strdup(mnt->mnt_dir) : NULL;
@@ -443,14 +459,14 @@ char *find_mnt_by_fsname(char *fsname)
 	return mntdir;
 }
 
-static int get_bootparam(void *buf, off_t offset, size_t size)
+int get_bootparam(void *buf, off_t offset, size_t size)
 {
 	int data_file;
 	char *debugfs_mnt, *sysfs_mnt;
 	char filename[PATH_MAX];
 	int err, has_sysfs_params = 0;
 
-	sysfs_mnt = find_mnt_by_fsname("sysfs");
+	sysfs_mnt = find_mnt_by_type("sysfs");
 	if (sysfs_mnt) {
 		snprintf(filename, PATH_MAX, "%s/%s", sysfs_mnt,
 			"kernel/boot_params/data");
@@ -461,7 +477,7 @@ static int get_bootparam(void *buf, off_t offset, size_t size)
 	}
 
 	if (!has_sysfs_params) {
-		debugfs_mnt = find_mnt_by_fsname("debugfs");
+		debugfs_mnt = find_mnt_by_type("debugfs");
 		if (!debugfs_mnt)
 			return 1;
 		snprintf(filename, PATH_MAX, "%s/%s", debugfs_mnt,
@@ -839,7 +855,7 @@ void setup_linux_system_parameters(struct kexec_info *info,
 	setup_subarch(real_mode);
 	if (bzImage_support_efi_boot && !arch_options.noefi)
 		setup_efi_info(info, real_mode);
-	
+
 	/* Default screen size */
 	real_mode->orig_x = 0;
 	real_mode->orig_y = 0;
@@ -893,4 +909,7 @@ void setup_linux_system_parameters(struct kexec_info *info,
 
 	/* fill the EDD information */
 	setup_edd_info(real_mode);
+
+	/* Always try to fill acpi_rsdp_addr */
+	real_mode->acpi_rsdp_addr = get_acpi_rsdp();
 }

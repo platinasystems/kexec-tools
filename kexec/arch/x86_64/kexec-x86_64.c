@@ -36,6 +36,8 @@ struct file_type file_type[] = {
 	{ "elf-x86_64", elf_x86_64_probe, elf_x86_64_load, elf_x86_64_usage },
 	{ "multiboot-x86", multiboot_x86_probe, multiboot_x86_load,
 	  multiboot_x86_usage },
+	{ "multiboot2-x86", multiboot2_x86_probe, multiboot2_x86_load,
+	  multiboot2_x86_usage },
 	{ "elf-x86", elf_x86_probe, elf_x86_load, elf_x86_usage },
 	{ "bzImage64", bzImage64_probe, bzImage64_load, bzImage64_usage },
 	{ "bzImage", bzImage_probe, bzImage_load, bzImage_usage },
@@ -55,6 +57,7 @@ void arch_usage(void)
 		"     --console-serial          Enable the serial console\n"
 		"     --pass-memmap-cmdline     Pass memory map via command line in kexec on panic case\n"
 		"     --noefi                   Disable efi support\n"
+		"     --reuse-video-type        Reuse old boot time video type blindly\n"
 		);
 }
 
@@ -67,6 +70,7 @@ struct arch_options_t arch_options = {
 	.core_header_type = CORE_TYPE_ELF64,
 	.pass_memmap_cmdline = 0,
 	.noefi = 0,
+	.reuse_video_type = 0,
 };
 
 int arch_process_options(int argc, char **argv)
@@ -135,6 +139,9 @@ int arch_process_options(int argc, char **argv)
 			break;
 		case OPT_NOEFI:
 			arch_options.noefi = 1;
+			break;
+		case OPT_REUSE_VIDEO_TYPE:
+			arch_options.reuse_video_type = 1;
 			break;
 		}
 	}
