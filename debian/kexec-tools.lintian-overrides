@@ -3,3 +3,7 @@
 # init scripts that require special handling at shutdown, does not apply
 kexec-tools: init.d-script-possible-missing-stop etc/init.d/kexec 0 1
 kexec-tools: init.d-script-possible-missing-stop etc/init.d/kexec-load 0 1
+# systemd already bundles services files for kexec
+kexec-tools: missing-systemd-service-for-init.d-script kexec
+kexec-tools: missing-systemd-service-for-init.d-script kexec-load
+

@@ -1,3 +1,9 @@
+kexec-tools (1:2.0.20-2) unstable; urgency=medium
+
+  * Fix FTBFS issue on x86 (Closes: #942617)
+
+ -- Khalid Aziz <khalid@debian.org>  Thu, 12 Mar 2020 13:31:02 -0600
+
 kexec-tools (1:2.0.20-1) unstable; urgency=medium
 
   * New upstream release

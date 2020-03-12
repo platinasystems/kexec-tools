@@ -5,3 +5,4 @@ add_debian_readme.patch
 coldreboot.patch
 linker-option.patch
 powerpcspe_support.patch
+ftbfs-i386.patch
