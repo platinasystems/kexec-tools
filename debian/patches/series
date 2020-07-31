@@ -6,3 +6,4 @@ coldreboot.patch
 linker-option.patch
 powerpcspe_support.patch
 ftbfs-i386.patch
+kexec-tools-remove-duplicated-variable-d.patch
