@@ -10,6 +10,7 @@ bindir		= @bindir@
 sbindir		= @sbindir@
 libexecdir	= @libexecdir@
 datadir		= @datadir@
+datarootdir	= @datarootdir@
 sysconfdir	= @sysconfdir@
 sharedstatedir	= @sharedstatedir@
 localstatedir	= @localstatedir@
@@ -46,6 +47,7 @@ TARGET_CFLAGS	= @TARGET_CFLAGS@
 CPPFLAGS	= @CPPFLAGS@ -I$(srcdir)/include -I$(srcdir)/util_lib/include \
 			-Iinclude/
 CFLAGS		= @CFLAGS@ -fno-strict-aliasing -Wall -Wstrict-prototypes
+PURGATORY_EXTRA_CFLAGS = @PURGATORY_EXTRA_CFLAGS@
 ASFLAGS		= @ASFLAGS@
 LDFLAGS		= @LDFLAGS@
 LIBS		= @LIBS@
@@ -125,7 +127,7 @@ all: $(TARGETS)
 clean =
 
 # collect objects to be removed in 'make clean'
-dist =	AUTHORS COPYING News TODO Makefile.in configure.ac configure	\
+dist =	AUTHORS COPYING INSTALL News TODO Makefile.in configure.ac configure \
 	kexec-tools.spec.in config/
 
 # utility function for converting a list of files (with extension) to

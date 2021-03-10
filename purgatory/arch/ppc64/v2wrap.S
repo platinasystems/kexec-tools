@@ -45,10 +45,14 @@
 	oris    rn,rn,name##@h;         \
 	ori     rn,rn,name##@l
 
-
 	.machine ppc64
 	.globl purgatory_start
 purgatory_start:	b	master
+	.org purgatory_start + 0x5c     # ABI: possible run_at_load flag at 0x5c
+	.globl run_at_load
+run_at_load:
+	.long 0
+	.size run_at_load, . - run_at_load
 	.org purgatory_start + 0x60     # ABI: slaves start at 60 with r3=phys
 slave:	b $
 	.org purgatory_start + 0x100    # ABI: end of copied region
@@ -56,7 +60,7 @@ slave:	b $
 
 #
 # The above 0x100 bytes at purgatory_start are replaced with the
-# code from the kernel (or next stage) by kexec/arch/ppc64/kexec-ppc64.c
+# code from the kernel (or next stage) by kexec/arch/ppc64/kexec-elf-ppc64.c
 #
 
 master:
@@ -90,12 +94,13 @@ master:
 80:
 	LOADADDR(6,kernel)
 	ld      4,0(6)          # load the kernel address
+	LOADADDR(6,run_at_load) # the load flag
+	lwz	7,0(6)		# possibly patched by kexec-elf-ppc64
+	stw	7,0x5c(4)	# and patch it into the kernel
 	li	5,0		# r5 will be 0 for kernel
 	mtctr	4		# prepare branch too
 	mr      3,16            # restore dt address
 
-	lwz	7,0(4)		# get the first instruction that we stole
-	stw	7,0(0)		# and put it in the slave loop at 0
 				# skip cache flush, do we care?
 
 	bctr			# start kernel

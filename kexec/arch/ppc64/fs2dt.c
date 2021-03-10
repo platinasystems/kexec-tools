@@ -41,13 +41,11 @@
 
 static char pathname[MAXPATH], *pathstart;
 static char propnames[NAMESPACE] = { 0 };
-static unsigned dtstruct[TREEWORDS], *dt;
+static unsigned dtstruct[TREEWORDS] __attribute__ ((aligned (8))), *dt;
 static unsigned long long mem_rsrv[2*MEMRESERVE] = { 0, 0 };
 
 static int crash_param = 0;
 static char local_cmdline[COMMAND_LINE_SIZE] = { "" };
-static unsigned *dt_len; /* changed len of modified cmdline
-			    in flat device-tree */
 extern mem_rgns_t usablemem_rgns;
 static struct bootblock bb[1];
 
@@ -120,6 +118,74 @@ static unsigned propnum(const char *name)
 	strcpy(propnames+offset, name);
 
 	return offset;
+}
+
+static void add_dyn_reconf_usable_mem_property(int fd)
+{
+	char fname[MAXPATH], *bname;
+	uint64_t buf[32];
+	uint64_t ranges[2*MAX_MEMORY_RANGES];
+	uint64_t base, end, loc_base, loc_end;
+	int range, rlen = 0, i;
+	int rngs_cnt, tmp_indx;
+
+	strcpy(fname, pathname);
+	bname = strrchr(fname, '/');
+	bname[0] = '\0';
+	bname = strrchr(fname, '/');
+	if (strncmp(bname, "/ibm,dynamic-reconfiguration-memory", 36))
+		return;
+
+	if (lseek(fd, 4, SEEK_SET) < 0)
+		die("unrecoverable error: error seeking in \"%s\": %s\n",
+			pathname, strerror(errno));
+
+	rlen = 0;
+	for (i = 0; i < num_of_lmbs; i++) {
+		if (read(fd, buf, 24) < 0)
+			die("unrecoverable error: error reading \"%s\": %s\n",
+				pathname, strerror(errno));
+
+		base = (uint64_t) buf[0];
+		end = base + lmb_size;
+		if (~0ULL - base < end)
+			die("unrecoverable error: mem property overflow\n");
+
+		tmp_indx = rlen++;
+
+		rngs_cnt = 0;
+		for (range = 0; range < usablemem_rgns.size; range++) {
+			loc_base = usablemem_rgns.ranges[range].start;
+			loc_end = usablemem_rgns.ranges[range].end;
+			if (loc_base >= base && loc_end <= end) {
+				ranges[rlen++] = loc_base;
+				ranges[rlen++] = loc_end - loc_base;
+				rngs_cnt++;
+			} else if (base < loc_end && end > loc_base) {
+				if (loc_base < base)
+					loc_base = base;
+				if (loc_end > end)
+					loc_end = end;
+				ranges[rlen++] = loc_base;
+				ranges[rlen++] = loc_end - loc_base;
+				rngs_cnt++;
+			}
+		}
+		/* Store the count of (base, size) duple */
+		ranges[tmp_indx] = rngs_cnt;
+	}
+		
+	rlen = rlen * sizeof(uint64_t);
+	/*
+	 * Add linux,drconf-usable-memory property.
+	 */
+	*dt++ = 3;
+	*dt++ = rlen;
+	*dt++ = propnum("linux,drconf-usable-memory");
+	if ((rlen >= 8) && ((unsigned long)dt & 0x4))
+		dt++;
+	memcpy(dt, &ranges, rlen);
+	dt += (rlen + 3)/4;
 }
 
 static void add_usable_mem_property(int fd, int len)
@@ -246,7 +312,6 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 		len = statbuf.st_size;
 
 		*dt++ = 3;
-		dt_len = dt;
 		*dt++ = len;
 		*dt++ = propnum(fn);
 
@@ -267,6 +332,10 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 		dt += (len + 3)/4;
 		if (!strcmp(dp->d_name, "reg") && usablemem_rgns.size)
 			add_usable_mem_property(fd, len);
+		if (!strcmp(dp->d_name, "ibm,dynamic-memory") &&
+					usablemem_rgns.size)
+			add_dyn_reconf_usable_mem_property(fd);
+
 		close(fd);
 	}
 
@@ -437,12 +506,11 @@ static void putnode(void)
 	free(namelist);
 }
 
-int create_flatten_tree(struct kexec_info *info, unsigned char **bufp,
-			unsigned long *sizep, char *cmdline)
+int create_flatten_tree(char **bufp, off_t *sizep, char *cmdline)
 {
 	unsigned long len;
 	unsigned long tlen;
-	unsigned char *buf;
+	char *buf;
 	unsigned long me;
 
 	me = 0;
@@ -484,7 +552,7 @@ int create_flatten_tree(struct kexec_info *info, unsigned char **bufp,
 
 	reserve(me, bb->totalsize); /* patched later in kexec_load */
 
-	buf = (unsigned char *) malloc(bb->totalsize);
+	buf = malloc(bb->totalsize);
 	*bufp = buf;
 	memcpy(buf, bb, bb->off_mem_rsvmap);
 	tlen = bb->off_mem_rsvmap;
