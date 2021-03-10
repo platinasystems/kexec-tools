@@ -43,13 +43,8 @@
 #include "../../crashdump.h"
 #include "kexec-x86.h"
 #include "crashdump-x86.h"
-
-#ifdef HAVE_LIBXENCTRL
-#include <xenctrl.h>
-#endif /* HAVE_LIBXENCTRL */
-
+#include "../../kexec-xen.h"
 #include "x86-linux-setup.h"
-
 #include <x86/x86-linux.h>
 
 extern struct arch_options_t arch_options;
@@ -293,6 +288,8 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges,
 		} else if(memcmp(str,"Persistent Memory\n",18) == 0 ) {
 			type = RANGE_PMEM;
 		} else if(memcmp(str,"reserved\n",9) == 0 ) {
+			type = RANGE_RESERVED;
+		} else if (memcmp(str, "Reserved\n", 9) == 0) {
 			type = RANGE_RESERVED;
 		} else if (memcmp(str, "GART\n", 5) == 0) {
 			gart_start = start;

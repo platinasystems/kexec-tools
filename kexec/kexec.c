@@ -20,6 +20,7 @@
  */
 
 #define _GNU_SOURCE
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -647,6 +648,15 @@ static void update_purgatory(struct kexec_info *info)
 		return;
 	}
 	arch_update_purgatory(info);
+
+	if (info->skip_checks) {
+		unsigned int tmp = 1;
+
+		elf_rel_set_symbol(&info->rhdr, "skip_checks", &tmp,
+			sizeof(tmp));
+		return;
+	}
+
 	memset(region, 0, sizeof(region));
 	sha256_starts(&ctx);
 	/* Compute a hash of the loaded kernel */
@@ -686,7 +696,7 @@ static void update_purgatory(struct kexec_info *info)
  *	Load the new kernel
  */
 static int my_load(const char *type, int fileind, int argc, char **argv,
-		   unsigned long kexec_flags, void *entry)
+		   unsigned long kexec_flags, int skip_checks, void *entry)
 {
 	char *kernel;
 	char *kernel_buf;
@@ -699,6 +709,7 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 
 	memset(&info, 0, sizeof(info));
 	info.kexec_flags = kexec_flags;
+	info.skip_checks = skip_checks;
 
 	result = 0;
 	if (argc - fileind <= 0) {
@@ -980,6 +991,7 @@ void usage(void)
 	       " -v, --version        Print the version of kexec.\n"
 	       " -f, --force          Force an immediate kexec,\n"
 	       "                      don't call shutdown.\n"
+	       " -i, --no-checks      Fast reboot, no memory integrity checks.\n"
 	       " -x, --no-ifdown      Don't bring down network interfaces.\n"
 	       " -y, --no-sync        Don't sync filesystems before kexec.\n"
 	       " -l, --load           Load the new kernel into the\n"
@@ -1005,6 +1017,12 @@ void usage(void)
 	       "                      preserve context)\n"
 	       "                      to original kernel.\n"
 	       " -s, --kexec-file-syscall Use file based syscall for kexec operation\n"
+	       " -c, --kexec-syscall  Use the kexec_load syscall for for compatibility\n"
+	       "                      with systems that don't support -s (default)\n"
+	       " -a, --kexec-syscall-auto  Use file based syscall for kexec and fall\n"
+	       "                      back to the compatibility syscall when file based\n"
+	       "                      syscall is not supported or the kernel did not\n"
+	       "                      understand the image\n"
 	       " -d, --debug          Enable debugging to help spot a failure.\n"
 	       " -S, --status         Return 0 if the type (by default crash) is loaded.\n"
 	       "\n"
@@ -1166,7 +1184,7 @@ static int do_kexec_file_load(int fileind, int argc, char **argv,
 
 	if (!is_kexec_file_load_implemented()) {
 		fprintf(stderr, "syscall kexec_file_load not available.\n");
-		return -1;
+		return -ENOSYS;
 	}
 
 	if (argc - fileind <= 0) {
@@ -1229,7 +1247,7 @@ static void print_crashkernel_region_size(void)
 		return;
 	}
 
-	printf("%lu\n", (start != end) ? (end - start + 1) : 0UL);
+	printf("%" PRIu64 "\n", (start != end) ? (end - start + 1) : 0UL);
 }
 
 int main(int argc, char *argv[])
@@ -1243,6 +1261,8 @@ int main(int argc, char *argv[])
 	int do_unload = 0;
 	int do_reuse_initrd = 0;
 	int do_kexec_file_syscall = 0;
+	int do_kexec_fallback = 0;
+	int skip_checks = 0;
 	int do_status = 0;
 	void *entry = 0;
 	char *type = 0;
@@ -1255,19 +1275,6 @@ int main(int argc, char *argv[])
 		{ 0, 0, 0, 0},
 	};
 	static const char short_options[] = KEXEC_ALL_OPT_STR;
-
-	/*
-	 * First check if --use-kexec-file-syscall is set. That changes lot of
-	 * things
-	 */
-	while ((opt = getopt_long(argc, argv, short_options,
-				  options, 0)) != -1) {
-		switch(opt) {
-		case OPT_KEXEC_FILE_SYSCALL:
-			do_kexec_file_syscall = 1;
-			break;
-		}
-	}
 
 	/* Reset getopt for the next pass. */
 	opterr = 1;
@@ -1310,8 +1317,7 @@ int main(int argc, char *argv[])
 			do_shutdown = 0;
 			do_sync = 0;
 			do_unload = 1;
-			if (do_kexec_file_syscall)
-				kexec_file_flags |= KEXEC_FILE_UNLOAD;
+			kexec_file_flags |= KEXEC_FILE_UNLOAD;
 			break;
 		case OPT_EXEC:
 			do_load = 0;
@@ -1354,10 +1360,8 @@ int main(int argc, char *argv[])
 			do_exec = 0;
 			do_shutdown = 0;
 			do_sync = 0;
-			if (do_kexec_file_syscall)
-				kexec_file_flags |= KEXEC_FILE_ON_CRASH;
-			else
-				kexec_flags = KEXEC_ON_CRASH;
+			kexec_file_flags |= KEXEC_FILE_ON_CRASH;
+			kexec_flags = KEXEC_ON_CRASH;
 			break;
 		case OPT_MEM_MIN:
 			mem_min = strtoul(optarg, &endptr, 0);
@@ -1383,7 +1387,19 @@ int main(int argc, char *argv[])
 			do_reuse_initrd = 1;
 			break;
 		case OPT_KEXEC_FILE_SYSCALL:
-			/* We already parsed it. Nothing to do. */
+			do_kexec_file_syscall = 1;
+			do_kexec_fallback = 0;
+			break;
+		case OPT_KEXEC_SYSCALL:
+			do_kexec_file_syscall = 0;
+			do_kexec_fallback = 0;
+			break;
+		case OPT_KEXEC_SYSCALL_AUTO:
+			do_kexec_file_syscall = 1;
+			do_kexec_fallback = 1;
+			break;
+		case OPT_NOCHECKS:
+			skip_checks = 1;
 			break;
 		case OPT_STATUS:
 			do_status = 1;
@@ -1415,7 +1431,9 @@ int main(int argc, char *argv[])
 		do_load_jump_back_helper = 0;
 	}
 
-	if (do_load && (kexec_flags & KEXEC_ON_CRASH) &&
+	if (do_load &&
+	    ((kexec_flags & KEXEC_ON_CRASH) ||
+	     (kexec_file_flags & KEXEC_FILE_ON_CRASH)) &&
 	    !is_crashkernel_mem_reserved()) {
 		die("Memory for crashkernel is not reserved\n"
 		    "Please reserve memory by passing"
@@ -1447,6 +1465,12 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+	if (do_kexec_file_syscall) {
+		if (do_load_jump_back_helper && !do_kexec_fallback)
+			die("--load-jump-back-helper not supported with kexec_file_load\n");
+		if (kexec_flags & KEXEC_PRESERVE_CONTEXT)
+			die("--load-preserve-context not supported with kexec_file_load\n");
+	}
 
 	if (do_reuse_initrd){
 		check_reuse_initrd();
@@ -1456,18 +1480,62 @@ int main(int argc, char *argv[])
 		result = k_status(kexec_flags);
 	}
 	if (do_unload) {
-		if (do_kexec_file_syscall)
+		if (do_kexec_file_syscall) {
 			result = kexec_file_unload(kexec_file_flags);
-		else
+			if ((result == -ENOSYS) && do_kexec_fallback)
+				do_kexec_file_syscall = 0;
+		}
+		if (!do_kexec_file_syscall)
 			result = k_unload(kexec_flags);
 	}
 	if (do_load && (result == 0)) {
-		if (do_kexec_file_syscall)
+		if (do_kexec_file_syscall) {
 			result = do_kexec_file_load(fileind, argc, argv,
 						 kexec_file_flags);
-		else
+			if (do_kexec_fallback) switch (result) {
+				/*
+				 * Something failed with signature verification.
+				 * Reject the image.
+				 */
+				case -ELIBBAD:
+				case -EKEYREJECTED:
+				case -ENOPKG:
+				case -ENOKEY:
+				case -EBADMSG:
+				case -EMSGSIZE:
+					/*
+					 * By default reject or do nothing if
+					 * succeded
+					 */
+				default: break;
+				case -ENOSYS: /* not implemented */
+					/*
+					 * Parsing image or other options failed
+					 * The image may be invalid or image
+					 * type may not supported by kernel so
+					 * retry parsing in kexec-tools.
+					 */
+				case -EINVAL:
+				case -ENOEXEC:
+					 /*
+					  * ENOTSUP can be unsupported image
+					  * type or unsupported PE signature
+					  * wrapper type, duh
+					  *
+					  * The kernel sometimes wrongly
+					  * returns ENOTSUPP (524) - ignore
+					  * that. It is not supposed to be seen
+					  * by userspace so seeing it is a
+					  * kernel bug
+					  */
+				case -ENOTSUP:
+					do_kexec_file_syscall = 0;
+					break;
+			}
+		}
+		if (!do_kexec_file_syscall)
 			result = my_load(type, fileind, argc, argv,
-						kexec_flags, entry);
+						kexec_flags, skip_checks, entry);
 	}
 	/* Don't shutdown unless there is something to reboot to! */
 	if ((result == 0) && (do_shutdown || do_exec) && !kexec_loaded(KEXEC_LOADED_PATH)) {
