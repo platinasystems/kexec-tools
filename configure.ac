@@ -4,14 +4,11 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.10)
+AC_INIT(kexec-tools, 2.0.12)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
 AC_PROG_CC
-
-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "`date '+%d %B %Y'`",
-		[Define to the release date of this package])
 
 
 dnl -- Compilation platform configuration
@@ -27,6 +24,7 @@ case $target_cpu in
 		;;
 	powerpc )
 		ARCH="ppc"
+		SUBARCH="BE"
 		;;
 	powerpc64 )
 		ARCH="ppc64"

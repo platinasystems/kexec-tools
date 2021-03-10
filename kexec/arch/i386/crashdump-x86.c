@@ -21,6 +21,7 @@
 
 #define _XOPEN_SOURCE	600
 #define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -301,6 +302,10 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges,
 			type = RANGE_ACPI;
 		} else if(memcmp(str,"ACPI Non-volatile Storage\n",26) == 0 ) {
 			type = RANGE_ACPI_NVS;
+		} else if(memcmp(str,"Persistent Memory (legacy)\n",27) == 0 ) {
+			type = RANGE_PRAM;
+		} else if(memcmp(str,"Persistent Memory\n",18) == 0 ) {
+			type = RANGE_PMEM;
 		} else if(memcmp(str,"reserved\n",9) == 0 ) {
 			type = RANGE_RESERVED;
 		} else if (memcmp(str, "GART\n", 5) == 0) {
@@ -640,6 +645,8 @@ static void cmdline_add_memmap_internal(char *cmdline, unsigned long startk,
 		strcat (str_mmap, "K$");
 	else if (type == RANGE_ACPI || type == RANGE_ACPI_NVS)
 		strcat (str_mmap, "K#");
+	else if (type == RANGE_PRAM)
+		strcat (str_mmap, "K!");
 
 	ultoa(startk, str_tmp);
 	strcat (str_mmap, str_tmp);
@@ -674,10 +681,11 @@ static int cmdline_add_memmap(char *cmdline, struct memory_range *memmap_p)
 		endk = (memmap_p[i].end + 1)/1024;
 		type = memmap_p[i].type;
 
-		/* Only adding memory regions of RAM and ACPI */
+		/* Only adding memory regions of RAM and ACPI and Persistent Mem */
 		if (type != RANGE_RAM &&
 		    type != RANGE_ACPI &&
-		    type != RANGE_ACPI_NVS)
+		    type != RANGE_ACPI_NVS &&
+		    type != RANGE_PRAM)
 			continue;
 
 		if (type == RANGE_ACPI || type == RANGE_ACPI_NVS)
@@ -997,7 +1005,9 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 		unsigned long start, end, size, type;
 		if ( !( mem_range[i].type == RANGE_ACPI
 			|| mem_range[i].type == RANGE_ACPI_NVS
-			|| mem_range[i].type == RANGE_RESERVED))
+			|| mem_range[i].type == RANGE_RESERVED
+			|| mem_range[i].type == RANGE_PMEM
+			|| mem_range[i].type == RANGE_PRAM))
 			continue;
 		start = mem_range[i].start;
 		end = mem_range[i].end;
@@ -1017,24 +1027,17 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	return 0;
 }
 
-int get_max_crash_kernel_limit(uint64_t *start, uint64_t *end)
+/* On x86, the kernel may make a low reservation in addition to the
+ * normal reservation. However, the kernel refuses to load the panic
+ * kernel to low memory, so always choose the highest range.
+ */
+int get_crash_kernel_load_range(uint64_t *start, uint64_t *end)
 {
-	int i, idx = -1;
-	unsigned long sz_max = 0, sz;
-
 	if (!crash_reserved_mem_nr)
 		return -1;
 
-	for (i = crash_reserved_mem_nr - 1; i >= 0; i--) {
-		sz = crash_reserved_mem[i].end - crash_reserved_mem[i].start +1;
-		if (sz <= sz_max)
-			continue;
-		sz_max = sz;
-		idx = i;
-	}
-
-	*start = crash_reserved_mem[idx].start;
-	*end = crash_reserved_mem[idx].end;
+	*start = crash_reserved_mem[crash_reserved_mem_nr - 1].start;
+	*end = crash_reserved_mem[crash_reserved_mem_nr - 1].end;
 
 	return 0;
 }

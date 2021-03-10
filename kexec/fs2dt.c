@@ -39,7 +39,7 @@
 #define MEMRESERVE 256		/* max number of reserved memory blocks */
 #define MEM_RANGE_CHUNK_SZ 2048 /* Initial num dwords for mem ranges */
 
-static char pathname[MAXPATH], *pathstart;
+static char pathname[MAXPATH];
 static char propnames[NAMESPACE] = { 0 };
 static unsigned *dt_base, *dt;
 static unsigned int dt_cur_size;
@@ -53,6 +53,7 @@ extern unsigned char reuse_initrd;
 /* Used for enabling printing message from purgatory code
  * Only has implemented for PPC64 */
 int my_debug;
+int dt_no_old_root;
 
 /* This provides the behaviour of hte existing ppc64 implementation */
 static void pad_structure_block(size_t len) {
@@ -511,6 +512,37 @@ static int comparefunc(const struct dirent **dentry1,
 	return strcmp(str1, str2);
 }
 
+/* grab root= from the old command line */
+static void dt_copy_old_root_param(void)
+{
+	FILE *fp;
+	char filename[MAXPATH];
+	char *last_cmdline = NULL;
+	char *p, *old_param;
+	size_t len = 0;
+
+	strcpy(filename, pathname);
+	strcat(filename, "bootargs");
+	fp = fopen(filename, "r");
+	if (fp) {
+		if (getline(&last_cmdline, &len, fp) == -1)
+			die("unable to read %s\n", filename);
+
+		p = strstr(last_cmdline, "root=");
+		if (p) {
+			old_param = strtok(p, " ");
+			len = strlen(local_cmdline);
+			if (len != 0)
+				strcat(local_cmdline, " ");
+			strcat(local_cmdline, old_param);
+		}
+	}
+	if (last_cmdline)
+		free(last_cmdline);
+
+	fclose(fp);
+}
+
 /*
  * put a node (directory) in the property structure.  first properties
  * then children.
@@ -545,7 +577,8 @@ static void putnode(void)
 	strcpy((void *)dt, *basename ? basename : "");
 	dt += ((plen + 4)/4);
 
-	strcat(pathname, "/");
+	if (*basename)
+		strcat(pathname, "/");
 	dn = pathname + strlen(pathname);
 
 	putprops(dn, namelist, numlist);
@@ -579,8 +612,11 @@ static void putnode(void)
 		reserve(initrd_base, initrd_size);
 	}
 
-	/* Add cmdline to the second kernel.  Check to see if the new
-	 * cmdline has a root=.  If not, use the old root= cmdline.  */
+	/*
+	 * Add cmdline to the second kernel. Use the old root= cmdline if there
+	 * is no root= in the new command line and there's no --dt-no-old-root
+	 * option being used.
+	 */
 	if (!strcmp(basename,"chosen/")) {
 		size_t result;
 		size_t cmd_len = 0;
@@ -598,30 +634,9 @@ static void putnode(void)
 			param = strstr(local_cmdline, "root=");
 		}
 
-		/* ... if not, grab root= from the old command line */
-		if (!param) {
-			FILE *fp;
-			char *last_cmdline = NULL;
-			char *old_param;
+		if (!param && !dt_no_old_root)
+			dt_copy_old_root_param();
 
-			strcpy(filename, pathname);
-			strcat(filename, "bootargs");
-			fp = fopen(filename, "r");
-			if (fp) {
-				if (getline(&last_cmdline, &cmd_len, fp) == -1)
-					die("unable to read %s\n", filename);
-
-				param = strstr(last_cmdline, "root=");
-				if (param) {
-					old_param = strtok(param, " ");
-					if (cmd_len != 0)
-						strcat(local_cmdline, " ");
-					strcat(local_cmdline, old_param);
-				}
-			}
-			if (last_cmdline)
-				free(last_cmdline);
-		}
 		strcat(local_cmdline, " ");
 		cmd_len = strlen(local_cmdline);
 		cmd_len = cmd_len + 1;
@@ -642,15 +657,19 @@ static void putnode(void)
 		 * code can print 'I'm in purgatory' message. Currently only
 		 * pseries/hvcterminal is supported.
 		 */
-		snprintf(filename, MAXPATH, "%slinux,stdout-path", pathname);
+		snprintf(filename, MAXPATH, "%sstdout-path", pathname);
 		fd = open(filename, O_RDONLY);
 		if (fd == -1) {
-			printf("Unable to find %s, printing from purgatory is diabled\n",
-														filename);
-			goto no_debug;
+			snprintf(filename, MAXPATH, "%slinux,stdout-path", pathname);
+			fd = open(filename, O_RDONLY);
+			if (fd == -1) {
+				printf("Unable to find %s[linux,]stdout-path, printing from purgatory is disabled\n",
+														pathname);
+				goto no_debug;
+			}
 		}
 		if (fstat(fd, &statbuf)) {
-			printf("Unable to stat %s, printing from purgatory is diabled\n",
+			printf("Unable to stat %s, printing from purgatory is disabled\n",
 														filename);
 			close(fd);
 			goto no_debug;
@@ -666,19 +685,19 @@ static void putnode(void)
 		result = read(fd, buff, statbuf.st_size);
 		close(fd);
 		if (result <= 0) {
-			printf("Unable to read %s, printing from purgatory is diabled\n",
+			printf("Unable to read %s, printing from purgatory is disabled\n",
 														filename);
 			goto no_debug;
 		}
 		snprintf(filename, MAXPATH, "/proc/device-tree/%s/compatible", buff);
 		fd = open(filename, O_RDONLY);
 		if (fd == -1) {
-			printf("Unable to find %s printing from purgatory is diabled\n",
+			printf("Unable to find %s printing from purgatory is disabled\n",
 														filename);
 			goto no_debug;
 		}
 		if (fstat(fd, &statbuf)) {
-			printf("Unable to stat %s printing from purgatory is diabled\n",
+			printf("Unable to stat %s printing from purgatory is disabled\n",
 														filename);
 			close(fd);
 			goto no_debug;
@@ -787,8 +806,6 @@ static void add_boot_block(char **bufp, off_t *sizep)
 void create_flatten_tree(char **bufp, off_t *sizep, const char *cmdline)
 {
 	strcpy(pathname, "/proc/device-tree/");
-
-	pathstart = pathname + strlen(pathname);
 
 	dt_cur_size = INIT_TREE_WORDS;
 	dt_base = malloc(dt_cur_size*4);
