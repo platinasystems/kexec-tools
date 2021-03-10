@@ -24,7 +24,6 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -90,6 +89,7 @@ void bzImage_usage(void)
 		"    --real-mode           Use the kernels real mode entry point.\n"
 		"    --command-line=STRING Set the kernel command line to STRING.\n"
 		"    --append=STRING       Set the kernel command line to STRING.\n"
+		"    --reuse-cmdline       Use kernel command line from running system.\n"
 		"    --initrd=FILE         Use FILE as the kernel's initial ramdisk.\n"
 		"    --ramdisk=FILE        Use FILE as the kernel's initial ramdisk.\n"
 		);
@@ -128,7 +128,7 @@ int do_bzImage_load(struct kexec_info *info,
 	}
 
 	kern16_size = (setup_sects +1) *512;
-	kernel_version = ((unsigned char *)&setup_header) + 512 + setup_header.kver_addr;
+	kernel_version = ((char *)&setup_header) + 512 + setup_header.kver_addr;
 	if (kernel_len < kern16_size) {
 		fprintf(stderr, "BzImage truncated?\n");
 		return -1;
@@ -198,10 +198,10 @@ int do_bzImage_load(struct kexec_info *info,
 	 * overflow takes place while applying relocations.
 	 */
 	if (!real_mode_entry && relocatable_kernel)
-		elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
+		elf_rel_build_load(info, &info->rhdr, (char *) purgatory, purgatory_size,
 					0x3000, 0x7fffffff, -1, 0);
 	else
-		elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
+		elf_rel_build_load(info, &info->rhdr, (char *) purgatory, purgatory_size,
 					0x3000, 640*1024, -1, 0);
 	dbgprintf("Loaded purgatory at addr 0x%lx\n", info->rhdr.rel_addr);
 	/* The argument/parameter segment */
@@ -262,7 +262,7 @@ int do_bzImage_load(struct kexec_info *info,
 	/* Tell the kernel what is going on */
 	setup_linux_bootloader_parameters(info, real_mode, setup_base,
 		kern16_size, command_line, command_line_len,
-		initrd, initrd_len);
+		(unsigned char *) initrd, initrd_len);
 
 	/* Get the initial register values */
 	elf_rel_get_symbol(&info->rhdr, "entry16_regs", &regs16, sizeof(regs16));
@@ -284,9 +284,12 @@ int do_bzImage_load(struct kexec_info *info,
 	/*
 	 * Initialize the 16bit start information.
 	 */
-	regs16.cs = (setup_base>>4) + 0x20;
+	regs16.ds = regs16.es = regs16.fs = regs16.gs = setup_base >> 4;
+	regs16.cs = regs16.ds + 0x20;
 	regs16.ip = 0;
+	/* XXX: Documentation/i386/boot.txt says 'ss' must equal 'ds' */
 	regs16.ss = (elf_rel_get_addr(&info->rhdr, "stack_end") - 64*1024) >> 4;
+	/* XXX: Documentation/i386/boot.txt says 'sp' must equal heap_end */
 	regs16.esp = 0xFFFC;
 	if (real_mode_entry) {
 		printf("Starting the kernel in real mode\n");
@@ -333,14 +336,16 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 	int debug, real_mode_entry;
 	int opt;
 	int result;
-#define OPT_APPEND	(OPT_ARCH_MAX+0)
-#define OPT_RAMDISK	(OPT_ARCH_MAX+1)
-#define OPT_REAL_MODE	(OPT_ARCH_MAX+2)
+#define OPT_APPEND		(OPT_ARCH_MAX+0)
+#define OPT_REUSE_CMDLINE	(OPT_ARCH_MAX+1)
+#define OPT_RAMDISK		(OPT_ARCH_MAX+2)
+#define OPT_REAL_MODE		(OPT_ARCH_MAX+3)
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "debug",		0, 0, OPT_DEBUG },
 		{ "command-line",	1, 0, OPT_APPEND },
 		{ "append",		1, 0, OPT_APPEND },
+		{ "reuse-cmdline",	1, 0, OPT_REUSE_CMDLINE },
 		{ "initrd",		1, 0, OPT_RAMDISK },
 		{ "ramdisk",		1, 0, OPT_RAMDISK },
 		{ "real-mode",		0, 0, OPT_REAL_MODE },
@@ -371,6 +376,9 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 			break;
 		case OPT_APPEND:
 			command_line = optarg;
+			break;
+		case OPT_REUSE_CMDLINE:
+			command_line = get_command_line();
 			break;
 		case OPT_RAMDISK:
 			ramdisk = optarg;

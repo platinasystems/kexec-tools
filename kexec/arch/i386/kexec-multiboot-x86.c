@@ -41,7 +41,6 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -130,6 +129,7 @@ void multiboot_x86_usage(void)
 /* Multiboot-specific options */
 {
 	printf("    --command-line=STRING        Set the kernel command line to STRING.\n");
+	printf("    --reuse-cmdline       	 Use kernel command line from running system.\n");
 	printf("    --module=\"MOD arg1 arg2...\"  Load module MOD with command-line \"arg1...\"\n");
 	printf("                                 (can be used multiple times).\n");
 }
@@ -156,13 +156,15 @@ int multiboot_x86_load(int argc, char **argv, const char *buf, off_t len,
 	int i;
 	int opt;
 	int modules, mod_command_line_space;
-#define OPT_CL  	(OPT_ARCH_MAX+0)
-#define OPT_MOD 	(OPT_ARCH_MAX+1)
-#define OPT_VGA 	(OPT_ARCH_MAX+2)
+#define OPT_CL  		(OPT_ARCH_MAX+0)
+#define OPT_REUSE_CMDLINE	(OPT_ARCH_MAX+1)
+#define OPT_MOD 		(OPT_ARCH_MAX+2)
+#define OPT_VGA 		(OPT_ARCH_MAX+3)
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "command-line",		1, 0, OPT_CL },
 		{ "append",			1, 0, OPT_CL },
+		{ "reuse-cmdline",		1, 0, OPT_REUSE_CMDLINE },
 		{ "module",			1, 0, OPT_MOD },
 		{ 0, 				0, 0, 0 },
 	};
@@ -195,6 +197,9 @@ int multiboot_x86_load(int argc, char **argv, const char *buf, off_t len,
 		case OPT_CL:
 			command_line = optarg;
 			break;
+		case OPT_REUSE_CMDLINE:
+			command_line = get_command_line();
+			break;
 		case OPT_MOD:
 			modules++;
 			mod_command_line_space += strlen(optarg) + 1;
@@ -210,7 +215,7 @@ int multiboot_x86_load(int argc, char **argv, const char *buf, off_t len,
 	elf_exec_build_load(info, &ehdr, buf, len, 0);
 
 	/* Load the setup code */
-	elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size, 0,
+	elf_rel_build_load(info, &info->rhdr, (char *) purgatory, purgatory_size, 0,
 				ULONG_MAX, 1, 0);
 	
 	/* The first segment will contain the multiboot headers:

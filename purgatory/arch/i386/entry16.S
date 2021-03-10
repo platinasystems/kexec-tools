@@ -17,20 +17,15 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "arch/debug.h"	
-
 #undef i386	
 	.text
-	.globl entry16_debug, entry16_debug_regs
-	.globl entry16_debug_pre32
-	.globl entry16_debug_first32
-	.globl entry16_debug_old_first32
+	.globl entry16, entry16_regs
 	.arch i386
 	.balign 16
-entry16_debug:
+entry16:
 	.code32
 	/* Compute where I am running at */
-	movl	$entry16_debug, %ebx	
+	movl	$entry16, %ebx	
 
 	/* Fixup my real mode segment */
 	movl	%ebx, %eax
@@ -55,15 +50,12 @@ entry16_debug:
 	orl	%ecx, 0x14 + gdt	
 	
 	
-DEBUG_CHAR('a')
 	/* Setup the classic BIOS interrupt table at 0x0 */
 	lidt	idtptr
-
-DEBUG_CHAR('b')
+	
 	/* Provide us with 16bit segments that we can use */
 	lgdt	gdt
 
-DEBUG_CHAR('c')
 	/* Note we don't disable the a20 line, (this shouldn't be required)
 	 * The code to do it is in kexec_test and it is a real pain.
 	 * I will worry about that when I need it.
@@ -77,26 +69,21 @@ DEBUG_CHAR('c')
 	movl	%eax, %fs
 	movl	%eax, %gs
 
-DEBUG_CHAR('d')
-
 	/* switch to 16bit mode */
-	ljmp	$0x08, $1f - entry16_debug
+	ljmp	$0x08, $1f - entry16
 1:
 	.code16
-DEBUG_CHAR('e')
 	/* Disable Paging and protected mode */
 	/* clear the PG & PE bits of CR0 */
 	movl	%cr0,%eax
 	andl	$~((1 << 31)|(1<<0)),%eax
 	movl	%eax,%cr0
 
-DEBUG_CHAR('f')
 	/* make intersegment jmp to flush the processor pipeline
 	 * and reload %cs:%eip (to clear upper 16 bits of %eip).
 	 */
-	ljmp	*(realptr - entry16_debug)
+	ljmp	*(realptr - entry16)
 3:
-DEBUG_CHAR('g')
 	/* we are in real mode now
 	 * set up the real mode segment registers : %ds, $ss, %es
 	 */
@@ -104,27 +91,26 @@ DEBUG_CHAR('g')
 	movw	%cs, %ax
 	movw	%ax, %ds
 
-DEBUG_CHAR('h')
 	/* Load the registers */
-	movl	eax - entry16_debug, %eax
-	movl	ebx - entry16_debug, %ebx
-	movl	ecx - entry16_debug, %ecx
-	movl	edx - entry16_debug, %edx
-	movl	esi - entry16_debug, %esi
-	movl	edi - entry16_debug, %esi
-	movl	esp - entry16_debug, %esp
-	movl	ebp - entry16_debug, %ebp
-	movw	es  - entry16_debug, %es
-	movw	ss  - entry16_debug, %ss
-	movw	fs  - entry16_debug, %fs
-	movw	gs  - entry16_debug, %gs
-	movw	ds  - entry16_debug, %ds
+	movl	eax - entry16, %eax
+	movl	ebx - entry16, %ebx
+	movl	ecx - entry16, %ecx
+	movl	edx - entry16, %edx
+	movl	esi - entry16, %esi
+	movl	edi - entry16, %esi
+	movl	esp - entry16, %esp
+	movl	ebp - entry16, %ebp
+	movw	es  - entry16, %es
+	movw	ss  - entry16, %ss
+	movw	fs  - entry16, %fs
+	movw	gs  - entry16, %gs
+	movw	ds  - entry16, %ds
 
 	/* Jump to the kernel entrypoint */
-	ljmp	%cs:*(realdest - entry16_debug)
+	ljmp	%cs:*(realdest - entry16)
 
 	.balign 4
-entry16_debug_regs:	
+entry16_regs:	
 eax:	.long	0x00000000
 ebx:	.long	0x00000000
 ecx:	.long	0x00000000
@@ -142,11 +128,11 @@ realdest:
 ip:	.word	0x0000
 cs:	.word	0x0000
 pad:	.word	0x0000
-	.size entry16_debug_regs, . - entry16_debug_regs	
+	.size entry16_regs, . - entry16_regs
 
 	.balign 16
 realptr:		
-	.word	3b - entry16_debug
+	.word	3b - entry16
 	.word	0x0000
 	
 	.data
@@ -157,6 +143,7 @@ idtptr:
 	.word	0x400 - 1
 	.word	0, 0
 
+	.balign 16	
 gdt:
 	/* 0x00 unusable segment so used as the gdt ptr */
 	.word gdt_end - gdt - 1
@@ -171,25 +158,3 @@ gdt:
 	.word	0xffff, 0x0000
 	.byte	0x00, 0x93, 0x00, 0x00
 gdt_end:
-	.size gdt, . - gdt
-
-	.text	
-entry16_debug_pre32:
-	.code16
-DEBUG_CHAR('i')
-	cli					# no interrupts allowed !
-	movb	$0x80, %al			# disable NMI for bootup
-						# sequence
-	outb	%al, $0x70
-	lret
-.size entry16_debug_pre32, . - entry16_debug_pre32
-	
-entry16_debug_first32:
-	.code32
-DEBUG_CHAR('j')
-	.byte	0xb8	/* movl $0x10000, %eax */
-entry16_debug_old_first32:
-	.long 0x100000
-	.size entry16_debug_old_first32, . - entry16_debug_old_first32
-	jmp	*%eax
-.size entry16_debug_first32, . - entry16_debug_first32

@@ -82,7 +82,7 @@ mem_rgns_t usablemem_rgns = {0, NULL};
  * we can determine the RAM size unless parsing the device-tree/memoy@/reg
  * property in the kernel.
  */
-unsigned long saved_max_mem = 0;
+uint64_t saved_max_mem = 0;
 
 /* Reads the appropriate file and retrieves the SYSTEM RAM regions for whom to
  * create Elf headers. Keeping it separate from get_memory_ranges() as
@@ -107,6 +107,7 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 	struct dirent *dentry, *mentry;
 	int i, n, crash_rng_len = 0;
 	unsigned long long start, end, cstart, cend;
+	int page_size;
 
 	crash_max_memory_ranges = max_memory_ranges + 6;
 	crash_rng_len = sizeof(struct memory_range) * crash_max_memory_ranges;
@@ -213,12 +214,25 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 	 */
 	if (crash_base < rtas_base + rtas_size &&
 		rtas_base < crash_base + crash_size) {
+		page_size = getpagesize();
 		cstart = rtas_base;
 		cend = rtas_base + rtas_size;
 		if (cstart < crash_base)
 			cstart = crash_base;
 		if (cend > crash_base + crash_size)
 			cend = crash_base + crash_size;
+		/*
+		 * The rtas section created here is formed by reading rtas-base
+		 * and rtas-size from /proc/device-tree/rtas.  Unfortunately
+		 * rtas-size is not required to be a multiple of PAGE_SIZE
+		 * The remainder of the page it ends on is just garbage, and is
+		 * safe to read, its just not accounted in rtas-size.  Since
+		 * we're creating an elf section here though, lets round it up
+		 * to the next page size boundary though, so makedumpfile can
+		 * read it safely without going south on us.
+		 */
+		cend = (cend + page_size - 1) & (~(page_size - 1));
+
 		crash_memory_range[memory_ranges].start = cstart;
 		crash_memory_range[memory_ranges++].end = cend;
 	}
@@ -250,7 +264,7 @@ err:
 }
 
 /* Converts unsigned long to ascii string. */
-static void ultoa(unsigned long i, char *str)
+static void ultoa(uint64_t i, char *str)
 {
 	int j = 0, k;
 	char tmp;
@@ -268,8 +282,8 @@ static void ultoa(unsigned long i, char *str)
 	}
 }
 
-static int add_cmdline_param(char *cmdline, unsigned long addr,
-				char *cmdstr, char *byte)
+static int add_cmdline_param(char *cmdline, uint64_t addr, char *cmdstr,
+				char *byte)
 {
 	int cmdlen, len, align = 1024;
 	char str[COMMAND_LINE_SIZE], *ptr;
@@ -306,10 +320,11 @@ static int add_cmdline_param(char *cmdline, unsigned long addr,
  * for crash memory image.
  */
 int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
-				unsigned long max_addr, unsigned long min_base)
+				uint64_t max_addr, unsigned long min_base)
 {
 	void *tmp;
-	unsigned long sz, elfcorehdr;
+	unsigned long sz;
+	uint64_t elfcorehdr;
 	int nr_ranges, align = 1024, i;
 	unsigned long long end;
 	struct memory_range *mem_range;

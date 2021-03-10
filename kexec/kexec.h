@@ -4,6 +4,7 @@
 #include "config.h"
 
 #include <sys/types.h>
+#include <stdio.h>
 #include <stdint.h>
 #define USE_BSD
 #include <byteswap.h>
@@ -125,6 +126,14 @@ struct kexec_info {
 	unsigned long kern_size;
 };
 
+struct arch_map_entry {
+	const char *machine;
+	unsigned long arch;
+};
+
+extern const struct arch_map_entry arches[];
+long physical_arch(void);
+
 void usage(void);
 int get_memory_ranges(struct memory_range **range, int *ranges,
 						unsigned long kexec_flags);
@@ -206,6 +215,9 @@ extern unsigned long add_buffer_phys_virt(struct kexec_info *info,
 	const void *buf, unsigned long bufsz, unsigned long memsz,
 	unsigned long buf_align, unsigned long buf_min, unsigned long buf_max,
 	int buf_end, int phys);
+extern void arch_reuse_initrd(void);
+
+extern int ifdown(void);
 
 extern unsigned char purgatory[];
 extern size_t purgatory_size;
@@ -218,6 +230,7 @@ int arch_process_options(int argc, char **argv);
 int arch_compat_trampoline(struct kexec_info *info);
 void arch_update_purgatory(struct kexec_info *info);
 int is_crashkernel_mem_reserved(void);
+char *get_command_line(void);
 
 int kexec_iomem_for_each_line(char *match,
 			      int (*callback)(void *data,

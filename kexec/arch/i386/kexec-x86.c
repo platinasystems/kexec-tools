@@ -25,98 +25,16 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <getopt.h>
-#include <sys/utsname.h>
 #include "../../kexec.h"
 #include "../../kexec-elf.h"
 #include "../../kexec-syscall.h"
+#include "../../firmware_memmap.h"
 #include "kexec-x86.h"
 #include "crashdump-x86.h"
 #include <arch/options.h>
 
-static struct memory_range memory_range[MAX_MEMORY_RANGES];
-
-/* Return a sorted list of memory ranges. */
-int get_memory_ranges(struct memory_range **range, int *ranges,
-				unsigned long kexec_flags)
-{
-	const char *iomem= proc_iomem();
-	int memory_ranges = 0;
-	char line[MAX_LINE];
-	FILE *fp;
-	fp = fopen(iomem, "r");
-	if (!fp) {
-		fprintf(stderr, "Cannot open %s: %s\n", 
-			iomem, strerror(errno));
-		return -1;
-	}
-	while(fgets(line, sizeof(line), fp) != 0) {
-		unsigned long long start, end;
-		char *str;
-		int type;
-		int consumed;
-		int count;
-		if (memory_ranges >= MAX_MEMORY_RANGES)
-			break;
-		count = sscanf(line, "%Lx-%Lx : %n",
-			&start, &end, &consumed);
-		if (count != 2) 
-			continue;
-		str = line + consumed;
-		end = end + 1;
-#if 0
-		printf("%016Lx-%016Lx : %s",
-			start, end, str);
-#endif
-		if (memcmp(str, "System RAM\n", 11) == 0) {
-			type = RANGE_RAM;
-		} 
-		else if (memcmp(str, "reserved\n", 9) == 0) {
-			type = RANGE_RESERVED;
-		}
-		else if (memcmp(str, "ACPI Tables\n", 12) == 0) {
-			type = RANGE_ACPI;
-		}
-		else if (memcmp(str, "ACPI Non-volatile Storage\n", 26) == 0) {
-			type = RANGE_ACPI_NVS;
-		}
-		else if (memcmp(str, "Crash kernel\n", 13) == 0) {
-		/* Redefine the memory region boundaries if kernel
-		 * exports the limits and if it is panic kernel.
-		 * Override user values only if kernel exported values are
-		 * subset of user defined values.
-		 */
-			if (kexec_flags & KEXEC_ON_CRASH) {
-				if (start > mem_min)
-					mem_min = start;
-				if (end < mem_max)
-					mem_max = end;
-			}
-			continue;
-		}
-		else {
-			continue;
-		}
-		/* Don't report the interrupt table as ram */
-		if (type == RANGE_RAM && (start < 0x100)) {
-			start = 0x100;
-		}
-		memory_range[memory_ranges].start = start;
-		memory_range[memory_ranges].end = end;
-		memory_range[memory_ranges].type = type;
-#if 0
-		printf("%016Lx-%016Lx : %x\n",
-			start, end, type);
-#endif
-		memory_ranges++;
-	}
-	fclose(fp);
-	*range = memory_range;
-	*ranges = memory_ranges;
-	return 0;
-}
-
 struct file_type file_type[] = {
-	{ "multiboot-x86", multiboot_x86_probe, multiboot_x86_load, 
+	{ "multiboot-x86", multiboot_x86_probe, multiboot_x86_load,
 	  multiboot_x86_usage },
 	{ "elf-x86", elf_x86_probe, elf_x86_load, elf_x86_usage },
 	{ "bzImage", bzImage_probe, bzImage_load, bzImage_usage },
@@ -188,24 +106,24 @@ int arch_process_options(int argc, char **argv)
 				}
 			}
 			if (value >= 65536) {
-				fprintf(stderr, "Bad serial port base '%s'\n", 
+				fprintf(stderr, "Bad serial port base '%s'\n",
 					optarg);
 				usage();
 				return -1;
-				
+
 			}
 			arch_options.serial_base = value;
 			break;
 		case OPT_SERIAL_BAUD:
 			value = strtoul(optarg, &end, 0);
-			if ((value > 115200) || ((115200 %value) != 0) || 
-				(value < 9600) || (*end)) 
+			if ((value > 115200) || ((115200 %value) != 0) ||
+				(value < 9600) || (*end))
 			{
 				fprintf(stderr, "Bad serial port baud rate '%s'\n",
 					optarg);
 				usage();
 				return -1;
-				
+
 			}
 			arch_options.serial_baud = value;
 			break;
@@ -223,43 +141,31 @@ int arch_process_options(int argc, char **argv)
 	return 0;
 }
 
+const struct arch_map_entry arches[] = {
+	/* For compatibility with older patches
+	 * use KEXEC_ARCH_DEFAULT instead of KEXEC_ARCH_386 here.
+	 */
+	{ "i386",   KEXEC_ARCH_DEFAULT },
+	{ "i486",   KEXEC_ARCH_DEFAULT },
+	{ "i586",   KEXEC_ARCH_DEFAULT },
+	{ "i686",   KEXEC_ARCH_DEFAULT },
+	{ "x86_64", KEXEC_ARCH_X86_64  },
+	{ 0,        0  		       },
+};
+
 int arch_compat_trampoline(struct kexec_info *info)
 {
-	int result;
-	struct utsname utsname;
-	result = uname(&utsname);
-	if (result < 0) {
-		fprintf(stderr, "uname failed: %s\n",
-			strerror(errno));
-		return -1;
-	}
-	if (	(strcmp(utsname.machine, "i386") == 0) ||
-		(strcmp(utsname.machine, "i486") == 0) ||
-		(strcmp(utsname.machine, "i586") == 0) ||
-		(strcmp(utsname.machine, "i686") == 0)) 
+	if ((info->kexec_flags & KEXEC_ARCH_MASK) == KEXEC_ARCH_X86_64)
 	{
-		/* For compatibility with older patches 
-		 * use KEXEC_ARCH_DEFAULT instead of KEXEC_ARCH_386 here.
-		 */
-		info->kexec_flags |= KEXEC_ARCH_DEFAULT;
-	}
-	else if (strcmp(utsname.machine, "x86_64") == 0)
-	{
-		info->kexec_flags |= KEXEC_ARCH_X86_64;
 		if (!info->rhdr.e_shdr) {
-			fprintf(stderr, 
+			fprintf(stderr,
 				"A trampoline is required for cross architecture support\n");
 			return -1;
 		}
 		elf_rel_set_symbol(&info->rhdr, "compat_x86_64_entry32",
 			&info->entry, sizeof(info->entry));
-		
+
 		info->entry = (void *)elf_rel_get_addr(&info->rhdr, "compat_x86_64");
-	}
-	else {
-		fprintf(stderr, "Unsupported machine type: %s\n",
-			utsname.machine);
-		return -1;
 	}
 	return 0;
 }
@@ -272,11 +178,11 @@ void arch_update_purgatory(struct kexec_info *info)
 		&arch_options.reset_vga, sizeof(arch_options.reset_vga));
 	elf_rel_set_symbol(&info->rhdr, "serial_base",
 		&arch_options.serial_base, sizeof(arch_options.serial_base));
-	elf_rel_set_symbol(&info->rhdr, "serial_baud", 
+	elf_rel_set_symbol(&info->rhdr, "serial_baud",
 		&arch_options.serial_baud, sizeof(arch_options.serial_baud));
-	elf_rel_set_symbol(&info->rhdr, "console_vga", 
+	elf_rel_set_symbol(&info->rhdr, "console_vga",
 		&arch_options.console_vga, sizeof(arch_options.console_vga));
-	elf_rel_set_symbol(&info->rhdr, "console_serial", 
+	elf_rel_set_symbol(&info->rhdr, "console_serial",
 		&arch_options.console_serial, sizeof(arch_options.console_serial));
 	if (info->kexec_flags & KEXEC_ON_CRASH) {
 		panic_kernel = 1;

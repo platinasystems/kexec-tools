@@ -4,11 +4,11 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools-testing, 20080324)
+AC_INIT(kexec-tools, 2.0.0)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 
-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "24th March 2008",
+AC_DEFINE_UNQUOTED(PACKAGE_DATE, "19th July 2008",
 		[Define to the release date of this package])
 
 
@@ -56,8 +56,13 @@ if test "${host_alias}" ; then
 	OBJDIR="$OBJDIR-${host_alias}"
 fi
 
-BUILD_CFLAGS='-O2 -Wall'
-TARGET_CFLAGS='-O2 -Wall'
+if test "x$BUILD_CFLAGS" = "x" ; then
+	BUILD_CFLAGS='-O2 -Wall'
+fi
+
+if test "x$TARGET_CFLAGS" = "x" ; then
+	TARGET_CFLAGS='-O2 -Wall'
+fi
 
 AC_ARG_WITH([objdir], AC_HELP_STRING([--with-objdir=<dir>],[select directory for object files]),
 	[ OBJDIR="$withval" ], [ OBJDIR="$OBJDIR" ])
@@ -84,19 +89,21 @@ else
 	BUILD_CC="$CC"
 fi
 
-dnl Find compiler for target
-if test "${target}" != "${host}" ; then
-	AC_CHECK_PROGS(TARGET_CC, [${target_alias}-gcc ${target}-gcc gcc])
-else
-	TARGET_CC="$CC"
-fi
-
 dnl Find the compiler tool chain
 AC_PROG_CPP
 AC_CHECK_TOOL([LD], ld, "no", $PATH)
 AC_CHECK_TOOL([AS], as, "no", $PATH)
 AC_CHECK_TOOL([OBJCOPY], objcopy, "no", $PATH)
 AC_CHECK_TOOL([AR], ar, "", $PATH)
+
+dnl Find compiler for target
+if test "${target}" != "${host}" ; then
+	AC_CHECK_PROGS(TARGET_CC, [${target_alias}-gcc ${target}-gcc gcc])
+	AC_CHECK_PROGS(TARGET_LD, [${target_alias}-ld ${target}-ld ld])
+else
+	TARGET_CC="$CC"
+	TARGET_LD="$LD"
+fi
 
 dnl Find the helper functions
 AC_PROG_INSTALL
@@ -148,6 +155,7 @@ dnl ---Output variables...
 AC_SUBST([BUILD_CC])
 AC_SUBST([BUILD_CFLAGS])
 AC_SUBST([TARGET_CC])
+AC_SUBST([TARGET_LD])
 AC_SUBST([TARGET_CFLAGS])
 AC_SUBST([ASFLAGS])
 
