@@ -39,7 +39,7 @@ static struct memory_range memory_range[MAX_MEMORY_RANGES];
 int get_memory_ranges(struct memory_range **range, int *ranges,
 				unsigned long kexec_flags)
 {
-	const char iomem[]= "/proc/iomem";
+	const char *iomem= proc_iomem(kexec_flags & KEXEC_ON_CRASH);
 	int memory_ranges = 0;
 	char line[MAX_LINE];
 	FILE *fp;
@@ -131,7 +131,7 @@ void arch_usage(void)
 	printf(
 		"     --reset-vga               Attempt to reset a standard vga device\n"
 		"     --serial=<port>           Specify the serial port for debug output\n"
-		"     --serial-baud=<buad_rate> Specify the serial port baud rate\n"
+		"     --serial-baud=<baud_rate> Specify the serial port baud rate\n"
 		"     --console-vga             Enable the vga console\n"
 		"     --console-serial          Enable the serial console\n"
 		"     --elf32-core-headers      Prepare core headers in ELF32 format\n"
@@ -145,7 +145,7 @@ struct arch_options_t arch_options = {
 	.serial_baud = 0,
 	.console_vga = 0,
 	.console_serial = 0,
-	.core_header_type = CORE_TYPE_ELF64,
+	.core_header_type = CORE_TYPE_UNDEF,
 };
 
 int arch_process_options(int argc, char **argv)

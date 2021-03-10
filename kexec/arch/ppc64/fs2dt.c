@@ -18,6 +18,7 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define _GNU_SOURCE
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -43,7 +44,6 @@ static char propnames[NAMESPACE] = { 0 };
 static unsigned dtstruct[TREEWORDS], *dt;
 static unsigned long long mem_rsrv[2*MEMRESERVE] = { 0, 0 };
 
-static int initrd_found = 0;
 static int crash_param = 0;
 static char local_cmdline[COMMAND_LINE_SIZE] = { "" };
 static unsigned *dt_len; /* changed len of modified cmdline
@@ -67,11 +67,11 @@ void reserve(unsigned long long where, unsigned long long length)
 }
 
 /* look for properties we need to reserve memory space for */
-static void checkprop(char *name, unsigned *data)
+static void checkprop(char *name, unsigned *data, int len)
 {
-	static unsigned long long base, size;
+	static unsigned long long base, size, end;
 
-	if ((data == NULL) && (base || size))
+	if ((data == NULL) && (base || size || end))
 		die("unrecoverable error: no property data");
 	else if (!strcmp(name, "linux,rtas-base"))
 		base = *data;
@@ -80,10 +80,23 @@ static void checkprop(char *name, unsigned *data)
 	else if (!strcmp(name, "rtas-size") ||
 			!strcmp(name, "linux,tce-size"))
 		size = *data;
+	else if (reuse_initrd && !strcmp(name, "linux,initrd-start"))
+		if (len == 8)
+			base = *(unsigned long long *) data;
+		else
+			base = *data;
+	else if (reuse_initrd && !strcmp(name, "linux,initrd-end"))
+		end = *(unsigned long long *) data;
 
+	if (size && end)
+		die("unrecoverable error: size and end set at same time\n");
 	if (base && size) {
 		reserve(base, size);
 		base = size = 0;
+	}
+	if (base && end) {
+		reserve(base, end-base);
+		base = end = 0;
 	}
 }
 
@@ -214,11 +227,18 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 				continue;
 
 		/* This property will be created/modified later in putnode()
-		 * So ignore it.
+		 * So ignore it, unless we are reusing the initrd.
 		 */
-		if (!strcmp(dp->d_name, "linux,initrd-start") ||
-			!strcmp(dp->d_name, "linux,initrd-end"))
+		if ((!strcmp(dp->d_name, "linux,initrd-start") ||
+		     !strcmp(dp->d_name, "linux,initrd-end")) &&
+		    !reuse_initrd)
 				continue;
+
+		/* This property will be created later in putnode() So
+		 * ignore it now.
+		 */
+		if (!strcmp(dp->d_name, "bootargs"))
+			continue;
 
 		if (! S_ISREG(statbuf.st_mode))
 			continue;
@@ -242,39 +262,7 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 			die("unrecoverable error: could not read \"%s\": %s\n",
 			    pathname, strerror(errno));
 
-		checkprop(fn, dt);
-
-		/* Get the cmdline from the device-tree and modify it */
-		if (!strcmp(dp->d_name, "bootargs")) {
-			int cmd_len;
-			char temp_cmdline[COMMAND_LINE_SIZE] = { "" };
-			char *param = NULL;
-			cmd_len = strlen(local_cmdline);
-			if (cmd_len != 0) {
-				param = strstr(local_cmdline, "crashkernel=");
-				if (param)
-					crash_param = 1;
-				param = strstr(local_cmdline, "root=");
-			}
-			if (!param) {
-				char *old_param;
-				memcpy(temp_cmdline, dt, len);
-				param = strstr(temp_cmdline, "root=");
-				if (param) {
-					old_param = strtok(param, " ");
-					if (cmd_len != 0)
-						strcat(local_cmdline, " ");
-					strcat(local_cmdline, old_param);
-				}
-			}
-			strcat(local_cmdline, " ");
-			cmd_len = strlen(local_cmdline);
-			cmd_len = cmd_len + 1;
-			memcpy(dt, local_cmdline,cmd_len);
-			len = cmd_len;
-			*dt_len = cmd_len;
-			fprintf(stderr, "Modified cmdline:%s\n", local_cmdline);
-		}
+		checkprop(fn, dt, len);
 
 		dt += (len + 3)/4;
 		if (!strcmp(dp->d_name, "reg") && usablemem_rgns.size)
@@ -283,7 +271,7 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 	}
 
 	fn[0] = '\0';
-	checkprop(pathname, NULL);
+	checkprop(pathname, NULL, 0);
 }
 
 /*
@@ -343,10 +331,8 @@ static void putnode(void)
 
 	putprops(dn, namelist, numlist);
 
-	/* Add initrd entries to the second kernel if first kernel does not
-	 * have and second kernel needs.
-	 */
-	if (initrd_base && !initrd_found && !strcmp(basename,"/chosen/")) {
+	/* Add initrd entries to the second kernel */
+	if (initrd_base && !strcmp(basename,"/chosen/")) {
 		int len = 8;
 		unsigned long long initrd_end;
 		*dt++ = 3;
@@ -372,6 +358,62 @@ static void putnode(void)
 		dt += (len + 3)/4;
 
 		reserve(initrd_base, initrd_size);
+	}
+
+	/* Add cmdline to the second kernel.  Check to see if the new
+	 * cmdline has a root=.  If not, use the old root= cmdline.  */
+	if (!strcmp(basename,"/chosen/")) {
+		size_t cmd_len = 0;
+		char *param = NULL;
+
+		cmd_len = strlen(local_cmdline);
+		if (cmd_len != 0) {
+			param = strstr(local_cmdline, "crashkernel=");
+			if (param)
+				crash_param = 1;
+			/* does the new cmdline have a root= ? ... */
+			param = strstr(local_cmdline, "root=");
+		}
+
+		/* ... if not, grab root= from the old command line */
+		if (!param) {
+			char filename[MAXPATH];
+			FILE *fp;
+			char *last_cmdline = NULL;
+			char *old_param;
+
+			strcpy(filename, pathname);
+			strcat(filename, "bootargs");
+			fp = fopen(filename, "r");
+			if (fp) {
+				if (getline(&last_cmdline, &cmd_len, fp) == -1)
+					die("unable to read %s\n", filename);
+
+				param = strstr(last_cmdline, "root=");
+				if (param) {
+					old_param = strtok(param, " ");
+					if (cmd_len != 0)
+						strcat(local_cmdline, " ");
+					strcat(local_cmdline, old_param);
+				}
+			}
+			if (last_cmdline)
+				free(last_cmdline);
+		}
+		strcat(local_cmdline, " ");
+		cmd_len = strlen(local_cmdline);
+		cmd_len = cmd_len + 1;
+
+		/* add new bootargs */
+		*dt++ = 3;
+		*dt++ = cmd_len;
+		*dt++ = propnum("bootargs");
+		if ((cmd_len >= 8) && ((unsigned long)dt & 0x4))
+			dt++;
+		memcpy(dt, local_cmdline,cmd_len);
+		dt += (cmd_len + 3)/4;
+
+		fprintf(stderr, "Modified cmdline:%s\n", local_cmdline);
 	}
 
 	for (i=0; i < numlist; i++) {
