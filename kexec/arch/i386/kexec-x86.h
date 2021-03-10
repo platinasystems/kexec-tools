@@ -52,6 +52,7 @@ struct arch_options_t {
 	enum coretype	core_header_type;
 	uint8_t  	pass_memmap_cmdline;
 	uint8_t		noefi;
+	uint8_t		reuse_video_type;
 };
 
 int multiboot_x86_probe(const char *buf, off_t len);
@@ -85,4 +86,5 @@ int nbi_load(int argc, char **argv, const char *buf, off_t len,
 void nbi_usage(void);
 
 extern unsigned xen_e820_to_kexec_type(uint32_t type);
+extern uint64_t get_acpi_rsdp(void);
 #endif /* KEXEC_X86_H */
