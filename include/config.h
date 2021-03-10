@@ -8,7 +8,7 @@
 /* #undef HAVE_LIBXENCTRL */
 
 /* Define to 1 if you have the `z' library (-lz). */
-#define HAVE_LIBZ 1
+/* #undef HAVE_LIBZ */
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -38,19 +38,19 @@
 #define PACKAGE_BUGREPORT ""
 
 /* Define to the release date of this package */
-#define PACKAGE_DATE "27th February 2008"
+#define PACKAGE_DATE "24th March 2008"
 
 /* Define to the full name of this package. */
 #define PACKAGE_NAME "kexec-tools-testing"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kexec-tools-testing 20080227"
+#define PACKAGE_STRING "kexec-tools-testing 20080324"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kexec-tools-testing"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "20080227"
+#define PACKAGE_VERSION "20080324"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1

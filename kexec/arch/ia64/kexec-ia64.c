@@ -80,7 +80,7 @@ static int split_range(int range, unsigned long start, unsigned long end)
 int get_memory_ranges(struct memory_range **range, int *ranges,
 				unsigned long kexec_flags)
 {
-	const char *iomem = proc_iomem(kexec_flags & KEXEC_ON_CRASH);
+	const char *iomem = proc_iomem();
 	char line[MAX_LINE];
 	FILE *fp;
 	fp = fopen(iomem, "r");

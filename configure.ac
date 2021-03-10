@@ -4,11 +4,11 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools-testing, 20080227)
+AC_INIT(kexec-tools-testing, 20080324)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 
-AC_DEFINE_UNQUOTED(PACKAGE_DATE, "27th February 2008",
+AC_DEFINE_UNQUOTED(PACKAGE_DATE, "24th March 2008",
 		[Define to the release date of this package])
 
 
@@ -37,6 +37,9 @@ case $target_cpu in
 		;;
 	sh4|sh4a|sh3|sh )
 		ARCH="sh"
+		;;
+	mips|mipsel )
+		ARCH="mips"
 		;;
 	ia64|x86_64|alpha )
 		ARCH="$target_cpu"

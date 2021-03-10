@@ -3,6 +3,8 @@
  *
  * Copyright (C) 2003-2005  Eric Biederman (ebiederm@xmission.com)
  *
+ * Modified (2007-05-15) by Francesco Chiechi to rudely handle mips platform
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation (version 2 of the License).
@@ -99,7 +101,8 @@ int valid_memory_range(struct kexec_info *info,
 		mstart = info->memory_range[i].start;
 		mend = info->memory_range[i].end;
 		if (i < info->memory_ranges - 1
-		    && mend == info->memory_range[i+1].start)
+		    && mend == info->memory_range[i+1].start
+		    && info->memory_range[i+1].type == RANGE_RAM)
 			mend = info->memory_range[i+1].end;
 
 		/* Check to see if we are fully contained */
@@ -282,9 +285,14 @@ unsigned long locate_hole(struct kexec_info *info,
 	return hole_base;
 }
 
-void add_segment(struct kexec_info *info,
+unsigned long __attribute__((weak)) virt_to_phys(unsigned long addr)
+{
+	abort();
+}
+
+void add_segment_phys_virt(struct kexec_info *info,
 	const void *buf, size_t bufsz,
-	unsigned long base, size_t memsz)
+	unsigned long base, size_t memsz, int phys)
 {
 	unsigned long last;
 	size_t size;
@@ -311,13 +319,16 @@ void add_segment(struct kexec_info *info,
 	if (base & (pagesize -1)) {
 		die("Base address: %x is not page aligned\n", base);
 	}
-	
+
+	if (phys)
+		base = virt_to_phys(base);
+
 	last = base + memsz -1;
 	if (!valid_memory_range(info, base, last)) {
 		die("Invalid memory segment %p - %p\n",
 			(void *)base, (void *)last);
 	}
-	
+
 	size = (info->nr_segments + 1) * sizeof(info->segment[0]);
 	info->segment = xrealloc(info->segment, size);
 	info->segment[info->nr_segments].buf   = buf;
@@ -331,10 +342,17 @@ void add_segment(struct kexec_info *info,
 	}
 }
 
-unsigned long add_buffer(struct kexec_info *info,
+void __attribute__((weak)) add_segment(struct kexec_info *info,
+				       const void *buf, size_t bufsz,
+				       unsigned long base, size_t memsz)
+{
+	return add_segment_phys_virt(info, buf, bufsz, base, memsz, 0);
+}
+
+unsigned long add_buffer_phys_virt(struct kexec_info *info,
 	const void *buf, unsigned long bufsz, unsigned long memsz,
 	unsigned long buf_align, unsigned long buf_min, unsigned long buf_max,
-	int buf_end)
+	int buf_end, int phys)
 {
 	unsigned long base;
 	int result;
@@ -354,8 +372,30 @@ unsigned long add_buffer(struct kexec_info *info,
 		die("locate_hole failed\n");
 	}
 	
-	add_segment(info, buf, bufsz, base, memsz);
+	add_segment_phys_virt(info, buf, bufsz, base, memsz, phys);
 	return base;
+}
+
+unsigned long add_buffer_virt(struct kexec_info *info, const void *buf,
+			      unsigned long bufsz, unsigned long memsz,
+			      unsigned long buf_align, unsigned long buf_min,
+			      unsigned long buf_max, int buf_end)
+{
+	return add_buffer_phys_virt(info, buf, bufsz, memsz, buf_align,
+				    buf_min, buf_max, buf_end, 0);
+}
+
+unsigned long __attribute__((weak)) add_buffer(struct kexec_info *info,
+					       const void *buf,
+					       unsigned long bufsz,
+					       unsigned long memsz,
+					       unsigned long buf_align,
+					       unsigned long buf_min,
+					       unsigned long buf_max,
+					       int buf_end)
+{
+	return add_buffer_virt(info, buf, bufsz, memsz, buf_align,
+			       buf_min, buf_max, buf_end);
 }
 
 char *slurp_file(const char *filename, off_t *r_size)
