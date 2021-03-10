@@ -40,20 +40,17 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
-/* Define to 1 if you have the `xc_get_machine_memory_map' function. */
-/* #undef HAVE_XC_GET_MACHINE_MEMORY_MAP */
-
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
 
 /* Define to the release date of this package */
-#define PACKAGE_DATE "19 March 2013"
+#define PACKAGE_DATE "09 June 2014"
 
 /* Define to the full name of this package. */
 #define PACKAGE_NAME "kexec-tools"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kexec-tools 2.0.4"
+#define PACKAGE_STRING "kexec-tools 2.0.7"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kexec-tools"
@@ -62,7 +59,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.4"
+#define PACKAGE_VERSION "2.0.7"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1

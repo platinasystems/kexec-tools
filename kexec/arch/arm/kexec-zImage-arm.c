@@ -24,6 +24,8 @@
 #define BOOT_PARAMS_SIZE 1536
 
 off_t initrd_base = 0, initrd_size = 0;
+unsigned int kexec_arm_image_size = 0;
+unsigned long long user_page_offset = (-1ULL);
 
 struct tag_header {
 	uint32_t size;
@@ -103,6 +105,8 @@ void zImage_arm_usage(void)
 		"     --ramdisk=FILE        Use FILE as the kernel's initial ramdisk.\n"
 		"     --dtb=FILE            Use FILE as the fdt blob.\n"
 		"     --atags               Use ATAGs instead of device-tree.\n"
+		"     --page-offset=PAGE_OFFSET\n"
+		"                           Set PAGE_OFFSET of crash dump vmcore\n"
 		);
 }
 
@@ -215,12 +219,73 @@ int atag_arm_load(struct kexec_info *info, unsigned long base,
 	return 0;
 }
 
+static int setup_dtb_prop(char **bufp, off_t *sizep, const char *node_name,
+		const char *prop_name, const void *val, int len)
+{
+	char *dtb_buf;
+	off_t dtb_size;
+	int off;
+	int prop_len = 0;
+	const struct fdt_property *prop;
+
+	if ((bufp == NULL) || (sizep == NULL) || (*bufp == NULL))
+		die("Internal error\n");
+
+	dtb_buf = *bufp;
+	dtb_size = *sizep;
+
+	/* check if the subnode has already exist */
+	off = fdt_path_offset(dtb_buf, node_name);
+	if (off == -FDT_ERR_NOTFOUND) {
+		dtb_size += fdt_node_len(node_name);
+		fdt_set_totalsize(dtb_buf, dtb_size);
+		dtb_buf = xrealloc(dtb_buf, dtb_size);
+		if (dtb_buf == NULL)
+			die("xrealloc failed\n");
+		off = fdt_add_subnode(dtb_buf, off, node_name);
+	}
+
+	if (off < 0) {
+		fprintf(stderr, "FDT: Error adding %s node.\n", node_name);
+		return -1;
+	}
+
+	prop = fdt_get_property(dtb_buf, off, prop_name, &prop_len);
+	if ((prop == NULL) && (prop_len != -FDT_ERR_NOTFOUND)) {
+		die("FDT: fdt_get_property");
+	} else if (prop == NULL) {
+		/* prop_len == -FDT_ERR_NOTFOUND */
+		/* prop doesn't exist */
+		dtb_size += fdt_prop_len(prop_name, len);
+	} else {
+		if (prop_len < len)
+			dtb_size += len - prop_len;
+	}
+
+	if (fdt_totalsize(dtb_buf) < dtb_size) {
+		fdt_set_totalsize(dtb_buf, dtb_size);
+		dtb_buf = xrealloc(dtb_buf, dtb_size);
+		if (dtb_buf == NULL)
+			die("xrealloc failed\n");
+	}
+
+	if (fdt_setprop(dtb_buf, off, prop_name,
+				val, len) != 0) {
+		fprintf(stderr, "FDT: Error setting %s/%s property.\n",
+				node_name, prop_name);
+		return -1;
+	}
+	*bufp = dtb_buf;
+	*sizep = dtb_size;
+	return 0;
+}
+
 int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
 	unsigned long base;
 	unsigned int atag_offset = 0x1000; /* 4k offset from memory start */
-	unsigned int offset = 0x8000;      /* 32k offset from memory start */
+	unsigned int extra_size = 0x8000; /* TEXT_OFFSET */
 	const char *command_line;
 	char *modified_cmdline = NULL;
 	off_t command_line_len;
@@ -232,6 +297,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	off_t dtb_length;
 	char *dtb_file;
 	off_t dtb_offset;
+	char *end;
 
 	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
@@ -242,6 +308,8 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		{ "ramdisk",		1, 0, OPT_RAMDISK },
 		{ "dtb",		1, 0, OPT_DTB },
 		{ "atags",		0, 0, OPT_ATAGS },
+		{ "image-size",		1, 0, OPT_IMAGE_SIZE },
+		{ "page-offset",	1, 0, OPT_PAGE_OFFSET },
 		{ 0, 			0, 0, 0 },
 	};
 	static const char short_options[] = KEXEC_ARCH_OPT_STR "a:r:";
@@ -263,9 +331,6 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			if (opt < OPT_ARCH_MAX) {
 				break;
 			}
-		case '?':
-			usage();
-			return -1;
 		case OPT_APPEND:
 			command_line = optarg;
 			break;
@@ -277,6 +342,12 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			break;
 		case OPT_ATAGS:
 			use_atags = 1;
+			break;
+		case OPT_IMAGE_SIZE:
+			kexec_arm_image_size = strtoul(optarg, &end, 0);
+			break;
+		case OPT_PAGE_OFFSET:
+			user_page_offset = strtoull(optarg, &end, 0);
 			break;
 		}
 	}
@@ -292,9 +363,11 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		if (command_line_len > COMMAND_LINE_SIZE)
 			command_line_len = COMMAND_LINE_SIZE;
 	}
-	if (ramdisk) {
+	if (ramdisk)
 		ramdisk_buf = slurp_file(ramdisk, &initrd_size);
-	}
+
+	if (dtb_file)
+		dtb_buf = slurp_file(dtb_file, &dtb_length);
 
 	/*
 	 * If we are loading a dump capture kernel, we need to update kernel
@@ -306,6 +379,8 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		modified_cmdline = xmalloc(COMMAND_LINE_SIZE);
 		if (!modified_cmdline)
 			return -1;
+
+		memset(modified_cmdline, '\0', COMMAND_LINE_SIZE);
 
 		if (command_line) {
 			(void) strncpy(modified_cmdline, command_line,
@@ -334,16 +409,23 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		}
 		base = start;
 	} else {
-		base = locate_hole(info,len+offset,0,0,ULONG_MAX,INT_MAX);
+		base = locate_hole(info, len + extra_size, 0, 0,
+				   ULONG_MAX, INT_MAX);
 	}
 
 	if (base == ULONG_MAX)
 		return -1;
 
-	/* assume the maximum kernel compression ratio is 4,
-	 * and just to be safe, place ramdisk after that
-	 */
-	initrd_base = base + len * 4;
+	if (kexec_arm_image_size) {
+		/* If the image size was passed as command line argument,
+		 * use that value for determining the address for initrd,
+		 * atags and dtb images. page-align the given length.*/
+		initrd_base = base + _ALIGN(kexec_arm_image_size, getpagesize());
+	} else {
+		/* Otherwise, assume the maximum kernel compression ratio
+		 * is 4, and just to be safe, place ramdisk after that */
+		initrd_base = base + _ALIGN(len * 4, getpagesize());
+	}
 
 	if (use_atags) {
 		/*
@@ -358,40 +440,20 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		 * Read a user-specified DTB file.
 		 */
 		if (dtb_file) {
-			dtb_buf = slurp_file(dtb_file, &dtb_length);
-
 			if (fdt_check_header(dtb_buf) != 0) {
 				fprintf(stderr, "Invalid FDT buffer.\n");
 				return -1;
 			}
 
 			if (command_line) {
-				const char *node_name = "/chosen";
-				const char *prop_name = "bootargs";
-				int off;
-
-				dtb_length = fdt_totalsize(dtb_buf) + 1024 +
-					strlen(command_line);
-				dtb_buf = xrealloc(dtb_buf, dtb_length);
-				fdt_set_totalsize(dtb_buf, dtb_length);
-
-				/* check if a /choosen subnode already exists */
-				off = fdt_path_offset(dtb_buf, node_name);
-
-				if (off == -FDT_ERR_NOTFOUND)
-					off = fdt_add_subnode(dtb_buf, off, node_name);
-
-				if (off < 0) {
-					fprintf(stderr, "FDT: Error adding %s node.\n", node_name);
+				/*
+				 *  Error should have been reported so
+				 *  directly return -1
+				 */
+				if (setup_dtb_prop(&dtb_buf, &dtb_length, "/chosen",
+						"bootargs", command_line,
+						strlen(command_line) + 1))
 					return -1;
-				}
-
-				if (fdt_setprop(dtb_buf, off, prop_name,
-						command_line, strlen(command_line) + 1) != 0) {
-					fprintf(stderr, "FDT: Error setting %s/%s property.\n",
-						node_name, prop_name);
-					return -1;
-				}
 			}
 		} else {
 			/*
@@ -400,14 +462,48 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			create_flatten_tree(&dtb_buf, &dtb_length, command_line);
 		}
 
-		if (base + atag_offset + dtb_length > base + offset) {
-			fprintf(stderr, "DTB too large!\n");
-			return -1;
+		/*
+		 * Search in memory to make sure there is enough memory
+		 * to hold initrd and dtb.
+		 *
+		 * Even if no initrd is used, this check is still
+		 * required for dtb.
+		 *
+		 * Crash kernel use fixed address, no check is ok.
+		 */
+		if ((info->kexec_flags & KEXEC_ON_CRASH) == 0) {
+			unsigned long page_size = getpagesize();
+			/*
+			 * DTB size may be increase a little
+			 * when setup initrd size. Add a full page
+			 * for it is enough.
+			 */
+			unsigned long hole_size = _ALIGN_UP(initrd_size, page_size) +
+				_ALIGN(dtb_length + page_size, page_size);
+			unsigned long initrd_base_new = locate_hole(info,
+					hole_size, page_size,
+					initrd_base, ULONG_MAX, INT_MAX);
+			if (base == ULONG_MAX)
+				return -1;
+			initrd_base = initrd_base_new;
 		}
 
 		if (ramdisk) {
 			add_segment(info, ramdisk_buf, initrd_size,
 			            initrd_base, initrd_size);
+
+			unsigned long start, end;
+			start = cpu_to_be32((unsigned long)(initrd_base));
+			end = cpu_to_be32((unsigned long)(initrd_base + initrd_size));
+
+			if (setup_dtb_prop(&dtb_buf, &dtb_length, "/chosen",
+					"linux,initrd-start", &start,
+					sizeof(start)))
+				return -1;
+			if (setup_dtb_prop(&dtb_buf, &dtb_length, "/chosen",
+					"linux,initrd-end", &end,
+					sizeof(end)))
+				return -1;
 		}
 
 		/* Stick the dtb at the end of the initrd and page
@@ -420,9 +516,9 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		            dtb_offset, dtb_length);
 	}
 
-	add_segment(info, buf, len, base + offset, len);
+	add_segment(info, buf, len, base + extra_size, len);
 
-	info->entry = (void*)base + offset;
+	info->entry = (void*)base + extra_size;
 
 	return 0;
 }

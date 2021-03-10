@@ -4,7 +4,7 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.4)
+AC_INIT(kexec-tools, 2.0.7)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
@@ -29,6 +29,11 @@ case $target_cpu in
 		;;
 	powerpc64 )
 		ARCH="ppc64"
+		SUBARCH="BE"
+		;;
+	powerpc64le )
+		ARCH="ppc64"
+		SUBARCH="LE"
 		;;
 	arm* )
 		ARCH="arm"
@@ -45,7 +50,7 @@ case $target_cpu in
 	cris|crisv32 )
 		ARCH="cris"
 		;;
-	ia64|x86_64|alpha )
+	ia64|x86_64|alpha|m68k )
 		ARCH="$target_cpu"
 		;;
 	* )
@@ -161,11 +166,8 @@ fi
 dnl find Xen control stack libraries
 if test "$with_xen" = yes ; then
 	AC_CHECK_HEADER(xenctrl.h,
-		AC_CHECK_LIB(xenctrl, xc_version, ,
+		AC_CHECK_LIB(xenctrl, xc_kexec_load, ,
 		AC_MSG_NOTICE([Xen support disabled])))
-	if test "$ac_cv_lib_xenctrl_xc_version" = yes ; then
-		AC_CHECK_FUNCS(xc_get_machine_memory_map)
-	fi
 fi
 
 dnl ---Sanity checks
@@ -197,6 +199,7 @@ AC_SUBST([TARGET_CFLAGS])
 AC_SUBST([ASFLAGS])
 
 AC_SUBST([ARCH])
+AC_SUBST([SUBARCH])
 AC_SUBST([OBJDIR])
 AC_SUBST([INSTALL])
 

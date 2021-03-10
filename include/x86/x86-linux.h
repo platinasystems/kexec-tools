@@ -12,8 +12,6 @@
 
 #ifndef ASSEMBLY
 
-#define PACKED __attribute__((packed))
-
 #ifndef E820_RAM
 struct e820entry {
 	uint64_t addr;	/* start of memory segment */
@@ -23,7 +21,7 @@ struct e820entry {
 #define E820_RESERVED	2
 #define E820_ACPI	3 /* usable as RAM once ACPI tables have been read */
 #define E820_NVS	4
-} PACKED;
+} __attribute__((packed));
 #endif
 
 /* FIXME expand on drive_info_)struct... */
@@ -115,7 +113,8 @@ struct x86_linux_param_header {
 	uint32_t ext_ramdisk_image;		/* 0xc0 */
 	uint32_t ext_ramdisk_size;		/* 0xc4 */
 	uint32_t ext_cmd_line_ptr;		/* 0xc8 */
-	uint8_t reserved4_1[0x1e0 - 0xcc];	/* 0xcc */
+	uint8_t reserved4_1[0x1c0 - 0xcc];	/* 0xe4 */
+	uint8_t efi_info[32];			/* 0x1c0 */
 	uint32_t alt_mem_k;			/* 0x1e0 */
 	uint8_t  reserved5[4];			/* 0x1e4 */
 	uint8_t  e820_map_nr;			/* 0x1e8 */
@@ -197,7 +196,7 @@ struct x86_linux_param_header {
 	uint8_t _pad8[48];			/* 0xcd0 */
 	struct 	edd_info eddbuf[EDDMAXNR];	/* 0xd00 */
 						/* 0xeec */
-#define COMMAND_LINE_SIZE (64*1024)
+#define COMMAND_LINE_SIZE 2048
 };
 
 struct x86_linux_faked_param_header {
@@ -255,7 +254,7 @@ struct x86_linux_header {
 	uint64_t pref_address;			/* 0x258 */
 	uint32_t init_size;			/* 0x260 */
 	uint32_t handover_offset;		/* 0x264 */
-} PACKED;
+} __attribute__((packed));
 
 #endif /* ASSEMBLY */
 

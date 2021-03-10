@@ -69,17 +69,6 @@ static int crash_max_memory_ranges;
  */
 mem_rgns_t usablemem_rgns = {0, NULL};
 
-/*
- * To store the memory size of the first kernel and this value will be
- * passed to the second kernel as command line (savemaxmem=xM).
- * The second kernel will be calculated saved_max_pfn based on this
- * variable.
- * Since we are creating/using usable-memory property, there is no way
- * we can determine the RAM size unless parsing the device-tree/memoy@/reg
- * property in the kernel.
- */
-uint64_t saved_max_mem = 0;
-
 static unsigned long long cstart, cend;
 static int memory_ranges;
 
@@ -157,12 +146,12 @@ static int get_dyn_reconf_crash_memory_ranges(void)
 			return -1;
 		}
 
-		start = ((uint64_t *)buf)[DRCONF_ADDR];
+		start = be64_to_cpu(((uint64_t *)buf)[DRCONF_ADDR]);
 		end = start + lmb_size;
 		if (start == 0 && end >= (BACKUP_SRC_END + 1))
 			start = BACKUP_SRC_END + 1;
 
-		flags = (*((uint32_t *)&buf[DRCONF_FLAGS]));
+		flags = be32_to_cpu((*((uint32_t *)&buf[DRCONF_FLAGS])));
 		/* skip this block if the reserved bit is set in flags (0x80)
 		   or if the block is not assigned to this partition (0x8) */
 		if ((flags & 0x80) || !(flags & 0x8))
@@ -263,8 +252,9 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 				goto err;
 			}
 
-			start = ((unsigned long long *)buf)[0];
-			end = start + ((unsigned long long *)buf)[1];
+			start = be64_to_cpu(((unsigned long long *)buf)[0]);
+			end = start +
+				be64_to_cpu(((unsigned long long *)buf)[1]);
 			if (start == 0 && end >= (BACKUP_SRC_END + 1))
 				start = BACKUP_SRC_END + 1;
 
@@ -303,14 +293,35 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 		crash_memory_range[memory_ranges].start = cstart;
 		crash_memory_range[memory_ranges++].end = cend;
 	}
-	/*
-	 * Can not trust the memory regions order that we read from
-	 * device-tree. Hence, get the MAX end value.
-	 */
-	for (i = 0; i < memory_ranges; i++)
-		if (saved_max_mem < crash_memory_range[i].end)
-			saved_max_mem = crash_memory_range[i].end;
 
+	/*
+	 * If OPAL region is overlapped with crashkernel, need to create ELF
+	 * Program header for the overlapped memory.
+	 */
+	if (crash_base < opal_base + opal_size &&
+		opal_base < crash_base + crash_size) {
+		page_size = getpagesize();
+		cstart = opal_base;
+		cend = opal_base + opal_size;
+		if (cstart < crash_base)
+			cstart = crash_base;
+		if (cend > crash_base + crash_size)
+			cend = crash_base + crash_size;
+		/*
+		 * The opal section created here is formed by reading opal-base
+		 * and opal-size from /proc/device-tree/ibm,opal.  Unfortunately
+		 * opal-size is not required to be a multiple of PAGE_SIZE
+		 * The remainder of the page it ends on is just garbage, and is
+		 * safe to read, its just not accounted in opal-size.  Since
+		 * we're creating an elf section here though, lets round it up
+		 * to the next page size boundary though, so makedumpfile can
+		 * read it safely without going south on us.
+		 */
+		cend = _ALIGN(cend, page_size);
+
+		crash_memory_range[memory_ranges].start = cstart;
+		crash_memory_range[memory_ranges++].end = cend;
+	}
 	*range = crash_memory_range;
 	*ranges = memory_ranges;
 
@@ -446,7 +457,6 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	 * read by flatten_device_tree and modified if required
 	 */
 	add_cmdline_param(mod_cmdline, elfcorehdr, " elfcorehdr=", "K");
-	add_cmdline_param(mod_cmdline, saved_max_mem, " savemaxmem=", "M");
 	return 0;
 }
 

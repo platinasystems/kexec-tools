@@ -25,10 +25,11 @@ KEXEC_SRCS_base += kexec/phys_arch.c
 KEXEC_SRCS_base += kexec/kernel_version.c
 KEXEC_SRCS_base += kexec/lzma.c
 KEXEC_SRCS_base += kexec/zlib.c
+KEXEC_SRCS_base += kexec/kexec-xen.c
 
 KEXEC_GENERATED_SRCS += $(PURGATORY_HEX_C)
 
-dist += kexec/Makefile $(KEXEC_GENERATED_SRCS)			\
+dist += kexec/Makefile						\
 	$(KEXEC_SRCS_base) kexec/crashdump-elf.c		\
 	kexec/crashdump.h kexec/firmware_memmap.h		\
 	kexec/kexec-elf-boot.h					\
@@ -72,6 +73,7 @@ include $(srcdir)/kexec/arch/alpha/Makefile
 include $(srcdir)/kexec/arch/arm/Makefile
 include $(srcdir)/kexec/arch/i386/Makefile
 include $(srcdir)/kexec/arch/ia64/Makefile
+include $(srcdir)/kexec/arch/m68k/Makefile
 include $(srcdir)/kexec/arch/mips/Makefile
 include $(srcdir)/kexec/arch/cris/Makefile
 include $(srcdir)/kexec/arch/ppc/Makefile

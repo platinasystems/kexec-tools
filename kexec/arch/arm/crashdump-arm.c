@@ -20,6 +20,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+#include <limits.h>
 #include <elf.h>
 #include <errno.h>
 #include <stdio.h>
@@ -31,6 +32,13 @@
 #include "../../crashdump.h"
 #include "crashdump-arm.h"
 
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define ELFDATANATIVE ELFDATA2LSB
+#elif __BYTE_ORDER == __BIG_ENDIAN
+#define ELFDATANATIVE ELFDATA2MSB
+#else
+#error "Unknown machine endian"
+#endif
 
 /*
  * Used to save various memory ranges/regions needed for the captured
@@ -47,12 +55,71 @@ static struct memory_range crash_reserved_mem;
 
 static struct crash_elf_info elf_info = {
 	.class		= ELFCLASS32,
-	.data		= ELFDATA2LSB,
+	.data		= ELFDATANATIVE,
 	.machine	= EM_ARM,
-	.page_offset	= PAGE_OFFSET,
+	.page_offset	= DEFAULT_PAGE_OFFSET,
 };
 
 unsigned long phys_offset;
+extern unsigned long long user_page_offset;
+
+/* Retrieve kernel _stext symbol virtual address from /proc/kallsyms */
+static unsigned long long get_kernel_stext_sym(void)
+{
+	const char *kallsyms = "/proc/kallsyms";
+	const char *stext = "_stext";
+	char sym[128];
+	char line[128];
+	FILE *fp;
+	unsigned long long vaddr;
+	char type;
+
+	fp = fopen(kallsyms, "r");	if (!fp) {
+		fprintf(stderr, "Cannot open %s\n", kallsyms);
+		return 0;
+	}
+
+	while(fgets(line, sizeof(line), fp) != NULL) {
+		if (sscanf(line, "%Lx %c %s", &vaddr, &type, sym) != 3)
+			continue;
+		if (strcmp(sym, stext) == 0) {
+			dbgprintf("kernel symbol %s vaddr = %16llx\n", stext, vaddr);
+			return vaddr;
+		}
+	}
+
+	fprintf(stderr, "Cannot get kernel %s symbol address\n", stext);
+	return 0;
+}
+
+static int get_kernel_page_offset(struct kexec_info *info,
+		struct crash_elf_info *elf_info)
+{
+	unsigned long long stext_sym_addr = get_kernel_stext_sym();
+	if (stext_sym_addr == 0) {
+		if (user_page_offset != (-1ULL)) {
+			elf_info->page_offset = user_page_offset;
+			dbgprintf("Unable to get _stext symbol from /proc/kallsyms, "
+					"use user provided vaule: %llx\n",
+					elf_info->page_offset);
+			return 0;
+		}
+		elf_info->page_offset = (unsigned long long)DEFAULT_PAGE_OFFSET;
+		dbgprintf("Unable to get _stext symbol from /proc/kallsyms, "
+				"use default: %llx\n",
+				elf_info->page_offset);
+		return 0;
+	} else if ((user_page_offset != (-1ULL)) &&
+			(user_page_offset != stext_sym_addr)) {
+		fprintf(stderr, "PAGE_OFFSET is set to %llx "
+				"instead of user provided value %llx\n",
+				stext_sym_addr & (~KVBASE_MASK),
+				user_page_offset);
+	}
+	elf_info->page_offset = stext_sym_addr & (~KVBASE_MASK);
+	dbgprintf("page_offset is set to %llx\n", elf_info->page_offset);
+	return 0;
+}
 
 /**
  * crash_range_callback() - callback called for each iomem region
@@ -68,8 +135,8 @@ unsigned long phys_offset;
  * regions is placed in @crash_memory_nr_ranges.
  */
 static int crash_range_callback(void *UNUSED(data), int UNUSED(nr),
-				char *str, unsigned long base,
-				unsigned long length)
+				char *str, unsigned long long base,
+				unsigned long long length)
 {
 	struct memory_range *range;
 
@@ -269,6 +336,7 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 	unsigned long bufsz;
 	void *buf;
 	int err;
+	int last_ranges;
 
 	/*
 	 * First fetch all the memory (RAM) ranges that we are going to pass to
@@ -285,10 +353,28 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 	phys_offset = usablemem_rgns.ranges->start;
 	dbgprintf("phys_offset: %#lx\n", phys_offset);
 
-	err = crash_create_elf32_headers(info, &elf_info,
+	if (get_kernel_page_offset(info, &elf_info))
+		return -1;
+
+	last_ranges = usablemem_rgns.size - 1;
+	if (last_ranges < 0)
+		last_ranges = 0;
+
+	if (crash_memory_ranges[last_ranges].end > ULONG_MAX) {
+
+		/* for support LPAE enabled kernel*/
+		elf_info.class = ELFCLASS64;
+
+		err = crash_create_elf64_headers(info, &elf_info,
 					 usablemem_rgns.ranges,
 					 usablemem_rgns.size, &buf, &bufsz,
 					 ELF_CORE_HEADER_ALIGN);
+	} else {
+		err = crash_create_elf32_headers(info, &elf_info,
+					 usablemem_rgns.ranges,
+					 usablemem_rgns.size, &buf, &bufsz,
+					 ELF_CORE_HEADER_ALIGN);
+	}
 	if (err)
 		return err;
 

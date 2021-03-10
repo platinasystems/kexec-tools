@@ -40,6 +40,7 @@
 #include <arch/options.h>
 
 static const int probe_debug = 0;
+int bzImage_support_efi_boot = 0;
 
 int bzImage_probe(const char *buf, off_t len)
 {
@@ -310,9 +311,8 @@ int do_bzImage_load(struct kexec_info *info,
 	if (real_mode_entry)
 		elf_rel_get_symbol(&info->rhdr, "entry16_regs",
 					 &regs16, sizeof(regs16));
-	elf_rel_get_symbol(&info->rhdr, "entry32_regs", &regs32, sizeof(regs32));
-	/*
 
+	/*
 	 * Initialize the 32bit start information.
 	 */
 	regs32.eax = 0; /* unused */
@@ -382,6 +382,7 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
 	char *command_line = NULL;
+	char *tmp_cmdline = NULL;
 	const char *ramdisk, *append = NULL;
 	char *ramdisk_buf;
 	off_t ramdisk_length;
@@ -413,15 +414,11 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 			if (opt < OPT_ARCH_MAX) {
 				break;
 			}
-		case '?':
-			usage();
-			return -1;
-			break;
 		case OPT_APPEND:
 			append = optarg;
 			break;
 		case OPT_REUSE_CMDLINE:
-			command_line = get_command_line();
+			tmp_cmdline = get_command_line();
 			break;
 		case OPT_RAMDISK:
 			ramdisk = optarg;
@@ -431,10 +428,16 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 			break;
 		}
 	}
-	command_line = concat_cmdline(command_line, append);
+	command_line = concat_cmdline(tmp_cmdline, append);
+	if (tmp_cmdline) {
+		free(tmp_cmdline);
+	}
 	command_line_len = 0;
 	if (command_line) {
 		command_line_len = strlen(command_line) +1;
+	} else {
+	    command_line = strdup("\0");
+	    command_line_len = 1;
 	}
 	ramdisk_buf = 0;
 	if (ramdisk) {
