@@ -21,6 +21,10 @@
 #include "kexec-mips.h"
 #include <arch/options.h>
 
+/* Currently not used but required by top-level fs2dt code */
+off_t initrd_base = 0;
+off_t initrd_size = 0;
+
 static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
 /* Return a sorted list of memory ranges. */
@@ -74,20 +78,48 @@ int file_types = sizeof(file_type) / sizeof(file_type[0]);
 
 void arch_usage(void)
 {
-#ifdef __mips64
-	fprintf(stderr, "     --elf32-core-headers Prepare core headers in "
-			"ELF32 format\n");
-#endif
+	printf(
+	"    --command-line=STRING Set the kernel command line to STRING.\n"
+	"    --append=STRING       Set the kernel command line to STRING.\n"
+	"    --dtb=FILE            Use FILE as the device tree blob.\n"
+	"    --initrd=FILE         Use FILE as initial ramdisk.\n"
+	);
 }
 
-#ifdef __mips64
 struct arch_options_t arch_options = {
-	.core_header_type = CORE_TYPE_ELF64
-};
+#ifdef __mips64
+	.core_header_type = CORE_TYPE_ELF64,
+#else
+	.core_header_type = CORE_TYPE_ELF32,
 #endif
+};
 
 int arch_process_options(int argc, char **argv)
 {
+	static const struct option options[] = {
+		KEXEC_ARCH_OPTIONS
+		{ 0 },
+	};
+	static const char short_options[] = KEXEC_ARCH_OPT_STR;
+	int opt;
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  options, 0)) != -1) {
+		switch (opt) {
+		case OPT_APPEND:
+			arch_options.command_line = optarg;
+			break;
+		case OPT_DTB:
+			arch_options.dtb_file = optarg;
+			break;
+		case OPT_RAMDISK:
+			arch_options.initrd_file = optarg;
+			break;
+		default:
+			break;
+		}
+	}
+
 	return 0;
 }
 

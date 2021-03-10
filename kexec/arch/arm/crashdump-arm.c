@@ -30,7 +30,10 @@
 #include "../../kexec.h"
 #include "../../kexec-elf.h"
 #include "../../crashdump.h"
+#include "../../mem_regions.h"
 #include "crashdump-arm.h"
+#include "iomem.h"
+#include "phys_to_virt.h"
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define ELFDATANATIVE ELFDATA2LSB
@@ -46,12 +49,20 @@
  */
 static struct memory_range crash_memory_ranges[CRASH_MAX_MEMORY_RANGES];
 struct memory_ranges usablemem_rgns = {
-    .size = 0,
-    .ranges = crash_memory_ranges,
+	.max_size = CRASH_MAX_MEMORY_RANGES,
+	.ranges = crash_memory_ranges,
 };
 
-/* memory range reserved for crashkernel */
-static struct memory_range crash_reserved_mem;
+/* The boot-time physical memory range reserved for crashkernel region */
+static struct memory_range crash_kernel_mem;
+
+/* reserved regions */
+#define CRASH_MAX_RESERVED_RANGES 2
+static struct memory_range crash_reserved_ranges[CRASH_MAX_RESERVED_RANGES];
+static struct memory_ranges crash_reserved_rgns = {
+	.max_size = CRASH_MAX_RESERVED_RANGES,
+	.ranges = crash_reserved_ranges,
+};
 
 static struct crash_elf_info elf_info = {
 	.class		= ELFCLASS32,
@@ -60,7 +71,6 @@ static struct crash_elf_info elf_info = {
 	.page_offset	= DEFAULT_PAGE_OFFSET,
 };
 
-unsigned long phys_offset;
 extern unsigned long long user_page_offset;
 
 /* Retrieve kernel _stext symbol virtual address from /proc/kallsyms */
@@ -71,25 +81,34 @@ static unsigned long long get_kernel_stext_sym(void)
 	char sym[128];
 	char line[128];
 	FILE *fp;
-	unsigned long long vaddr;
+	unsigned long long vaddr = 0;
 	char type;
 
-	fp = fopen(kallsyms, "r");	if (!fp) {
+	fp = fopen(kallsyms, "r");
+	if (!fp) {
 		fprintf(stderr, "Cannot open %s\n", kallsyms);
 		return 0;
 	}
 
 	while(fgets(line, sizeof(line), fp) != NULL) {
-		if (sscanf(line, "%Lx %c %s", &vaddr, &type, sym) != 3)
+		unsigned long long addr;
+
+		if (sscanf(line, "%Lx %c %s", &addr, &type, sym) != 3)
 			continue;
+
 		if (strcmp(sym, stext) == 0) {
-			dbgprintf("kernel symbol %s vaddr = %16llx\n", stext, vaddr);
-			return vaddr;
+			dbgprintf("kernel symbol %s vaddr = %#llx\n", stext, addr);
+			vaddr = addr;
+			break;
 		}
 	}
 
-	fprintf(stderr, "Cannot get kernel %s symbol address\n", stext);
-	return 0;
+	fclose(fp);
+
+	if (vaddr == 0)
+		fprintf(stderr, "Cannot get kernel %s symbol address\n", stext);
+
+	return vaddr;
 }
 
 static int get_kernel_page_offset(struct kexec_info *info,
@@ -117,96 +136,6 @@ static int get_kernel_page_offset(struct kexec_info *info,
 				user_page_offset);
 	}
 	elf_info->page_offset = stext_sym_addr & (~KVBASE_MASK);
-	dbgprintf("page_offset is set to %llx\n", elf_info->page_offset);
-	return 0;
-}
-
-/**
- * crash_range_callback() - callback called for each iomem region
- * @data: not used
- * @nr: not used
- * @str: name of the memory region
- * @base: start address of the memory region
- * @length: size of the memory region
- *
- * This function is called once for each memory region found in /proc/iomem. It
- * locates system RAM and crashkernel reserved memory and places these to
- * variables: @crash_memory_ranges and @crash_reserved_mem. Number of memory
- * regions is placed in @crash_memory_nr_ranges.
- */
-static int crash_range_callback(void *UNUSED(data), int UNUSED(nr),
-				char *str, unsigned long long base,
-				unsigned long long length)
-{
-	struct memory_range *range;
-
-	if (usablemem_rgns.size >= CRASH_MAX_MEMORY_RANGES)
-		return 1;
-
-	range = usablemem_rgns.ranges + usablemem_rgns.size;
-
-	if (strncmp(str, "System RAM\n", 11) == 0) {
-		range->start = base;
-		range->end = base + length - 1;
-		range->type = RANGE_RAM;
-		usablemem_rgns.size++;
-	} else if (strncmp(str, "Crash kernel\n", 13) == 0) {
-		crash_reserved_mem.start = base;
-		crash_reserved_mem.end = base + length - 1;
-		crash_reserved_mem.type = RANGE_RAM;
-	}
-
-	return 0;
-}
-
-/**
- * crash_exclude_range() - excludes memory region reserved for crashkernel
- *
- * Function locates where crashkernel reserved memory is and removes that region
- * from the available memory regions.
- */
-static void crash_exclude_range(void)
-{
-	const struct memory_range *range = &crash_reserved_mem;
-	int i;
-
-	for (i = 0; i < usablemem_rgns.size; i++) {
-		struct memory_range *r = usablemem_rgns.ranges + i;
-
-		/*
-		 * We assume that crash area is fully contained in
-		 * some larger memory area.
-		 */
-		if (r->start <= range->start && r->end >= range->end) {
-			struct memory_range *new;
-			/*
-			 * Let's split this area into 2 smaller ones and
-			 * remove excluded range from between. First create
-			 * new entry for the remaining area.
-			 */
-			new = usablemem_rgns.ranges + usablemem_rgns.size;
-			new->start = range->end + 1;
-			new->end = r->end;
-			usablemem_rgns.size++;
-			/*
-			 * Next update this area to end before excluded range.
-			 */
-			r->end = range->start - 1;
-			break;
-		}
-	}
-}
-
-static int range_cmp(const void *a1, const void *a2)
-{
-	const struct memory_range *r1 = a1;
-	const struct memory_range *r2 = a2;
-
-	if (r1->start > r2->start)
-		return 1;
-	if (r1->start < r2->start)
-		return -1;
-
 	return 0;
 }
 
@@ -221,28 +150,40 @@ static int range_cmp(const void *a1, const void *a2)
  */
 static int crash_get_memory_ranges(void)
 {
-	/*
-	 * First read all memory regions that can be considered as
-	 * system memory including the crash area.
-	 */
-	kexec_iomem_for_each_line(NULL, crash_range_callback, NULL);
+	int i;
 
 	if (usablemem_rgns.size < 1) {
 		errno = EINVAL;
 		return -1;
 	}
 
+	dbgprint_mem_range("Reserved memory ranges",
+			   crash_reserved_rgns.ranges,
+			   crash_reserved_rgns.size);
+
 	/*
-	 * Exclude memory reserved for crashkernel (this may result a split memory
-	 * region).
+	 * Exclude all reserved memory from the usable memory regions.
+	 * We want to avoid dumping the crashkernel region itself.  Note
+	 * that this may result memory regions in usablemem_rgns being
+	 * split.
 	 */
-	crash_exclude_range();
+	for (i = 0; i < crash_reserved_rgns.size; i++) {
+		if (mem_regions_exclude(&usablemem_rgns,
+					&crash_reserved_rgns.ranges[i])) {
+			fprintf(stderr,
+				"Error: Number of crash memory ranges excedeed the max limit\n");
+			errno = ENOMEM;
+			return -1;
+		}
+	}
 
 	/*
 	 * Make sure that the memory regions are sorted.
 	 */
-	qsort(usablemem_rgns.ranges, usablemem_rgns.size,
-	      sizeof(*usablemem_rgns.ranges), range_cmp);
+	mem_regions_sort(&usablemem_rgns);
+
+	dbgprint_mem_range("Coredump memory ranges",
+			   usablemem_rgns.ranges, usablemem_rgns.size);
 
 	return 0;
 }
@@ -309,8 +250,8 @@ static void dump_memory_ranges(void)
 		return;
 
 	dbgprintf("crashkernel: [%#llx - %#llx] (%ldM)\n",
-		  crash_reserved_mem.start, crash_reserved_mem.end,
-		  (unsigned long)range_size(&crash_reserved_mem) >> 20);
+		  crash_kernel_mem.start, crash_kernel_mem.end,
+		  (unsigned long)range_size(&crash_kernel_mem) >> 20);
 
 	for (i = 0; i < usablemem_rgns.size; i++) {
 		struct memory_range *r = usablemem_rgns.ranges + i;
@@ -351,16 +292,30 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 	 * region as PHYS_OFFSET.
 	 */
 	phys_offset = usablemem_rgns.ranges->start;
-	dbgprintf("phys_offset: %#lx\n", phys_offset);
 
 	if (get_kernel_page_offset(info, &elf_info))
 		return -1;
+
+	dbgprintf("phys offset = %#llx, page offset = %llx\n",
+		  phys_offset, elf_info.page_offset);
+
+	/*
+	 * Ensure that the crash kernel memory range is sane. The crash kernel
+	 * must be located within memory which is visible during booting.
+	 */
+	if (crash_kernel_mem.end > ARM_MAX_VIRTUAL) {
+		fprintf(stderr,
+			"Crash kernel memory [0x%llx-0x%llx] is inaccessible at boot - unable to load crash kernel\n",
+			crash_kernel_mem.start, crash_kernel_mem.end);
+		return -1;
+	}
 
 	last_ranges = usablemem_rgns.size - 1;
 	if (last_ranges < 0)
 		last_ranges = 0;
 
-	if (crash_memory_ranges[last_ranges].end > ULONG_MAX) {
+	if (crash_memory_ranges[last_ranges].end > UINT32_MAX) {
+		dbgprintf("Using 64-bit ELF core format\n");
 
 		/* for support LPAE enabled kernel*/
 		elf_info.class = ELFCLASS64;
@@ -370,6 +325,7 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 					 usablemem_rgns.size, &buf, &bufsz,
 					 ELF_CORE_HEADER_ALIGN);
 	} else {
+		dbgprintf("Using 32-bit ELF core format\n");
 		err = crash_create_elf32_headers(info, &elf_info,
 					 usablemem_rgns.ranges,
 					 usablemem_rgns.size, &buf, &bufsz,
@@ -386,8 +342,8 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 	 * regions to be aligned to SECTION_SIZE.
 	 */
 	elfcorehdr = add_buffer_phys_virt(info, buf, bufsz, bufsz, 1 << 20,
-					  crash_reserved_mem.start,
-					  crash_reserved_mem.end, -1, 0);
+					  crash_kernel_mem.start,
+					  crash_kernel_mem.end, -1, 0);
 
 	dbgprintf("elfcorehdr: %#lx\n", elfcorehdr);
 	cmdline_add_elfcorehdr(mod_cmdline, elfcorehdr);
@@ -397,7 +353,7 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 	 * prevents the dump capture kernel from using any other memory regions
 	 * which belong to the primary kernel.
 	 */
-	cmdline_add_mem(mod_cmdline, elfcorehdr - crash_reserved_mem.start);
+	cmdline_add_mem(mod_cmdline, elfcorehdr - crash_kernel_mem.start);
 
 	dump_memory_ranges();
 	dbgprintf("kernel command line: \"%s\"\n", mod_cmdline);
@@ -405,12 +361,55 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline)
 	return 0;
 }
 
+/**
+ * iomem_range_callback() - callback called for each iomem region
+ * @data: not used
+ * @nr: not used
+ * @str: name of the memory region (not NULL terminated)
+ * @base: start address of the memory region
+ * @length: size of the memory region
+ *
+ * This function is called for each memory range in /proc/iomem, stores
+ * the location of the crash kernel range into @crash_kernel_mem, and
+ * stores the system RAM into @usablemem_rgns.
+ */
+static int iomem_range_callback(void *UNUSED(data), int UNUSED(nr),
+				char *str, unsigned long long base,
+				unsigned long long length)
+{
+	if (strncmp(str, CRASH_KERNEL_BOOT, strlen(CRASH_KERNEL_BOOT)) == 0) {
+		crash_kernel_mem.start = base;
+		crash_kernel_mem.end = base + length - 1;
+		crash_kernel_mem.type = RANGE_RAM;
+		return mem_regions_add(&crash_reserved_rgns,
+				       base, length, RANGE_RAM);
+	}
+	else if (strncmp(str, CRASH_KERNEL, strlen(CRASH_KERNEL)) == 0) {
+		if (crash_kernel_mem.start == crash_kernel_mem.end) {
+			crash_kernel_mem.start = base;
+			crash_kernel_mem.end = base + length - 1;
+			crash_kernel_mem.type = RANGE_RAM;
+		}
+		return mem_regions_add(&crash_reserved_rgns,
+				       base, length, RANGE_RAM);
+	}
+	else if (strncmp(str, SYSTEM_RAM, strlen(SYSTEM_RAM)) == 0) {
+		return mem_regions_add(&usablemem_rgns,
+				       base, length, RANGE_RAM);
+	}
+	return 0;
+}
+
+/**
+ * is_crashkernel_mem_reserved() - check for the crashkernel reserved region
+ *
+ * Check for the crashkernel reserved region in /proc/iomem, and return
+ * true if it is present, or false otherwise. We use this to store the
+ * location of this region, and system RAM regions.
+ */
 int is_crashkernel_mem_reserved(void)
 {
-	uint64_t start, end;
+	kexec_iomem_for_each_line(NULL, iomem_range_callback, NULL);
 
-	if (parse_iomem_single("Crash kernel\n", &start, &end) == 0)
-		return start != end;
-
-	return 0;
+	return crash_kernel_mem.start != crash_kernel_mem.end;
 }

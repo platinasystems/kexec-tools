@@ -9,13 +9,13 @@ extern "C" {
 #define DEFAULT_PAGE_OFFSET		(0xc0000000)
 #define KVBASE_MASK	(0x1ffffff)
 #define CRASH_MAX_MEMORY_RANGES	32
+#define ARM_MAX_VIRTUAL		UINT32_MAX
 
 
 extern struct memory_ranges usablemem_rgns;
 
 struct kexec_info;
 
-extern unsigned long phys_offset;
 extern int load_crashdump_segments(struct kexec_info *, char *);
 
 #ifdef __cplusplus

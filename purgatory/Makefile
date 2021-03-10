@@ -19,6 +19,7 @@ dist += purgatory/Makefile $(PURGATORY_SRCS)				\
 
 include $(srcdir)/purgatory/arch/alpha/Makefile
 include $(srcdir)/purgatory/arch/arm/Makefile
+include $(srcdir)/purgatory/arch/arm64/Makefile
 include $(srcdir)/purgatory/arch/i386/Makefile
 include $(srcdir)/purgatory/arch/ia64/Makefile
 include $(srcdir)/purgatory/arch/mips/Makefile
@@ -37,9 +38,7 @@ clean += $(PURGATORY_OBJS) $(PURGATORY_DEPS) $(PURGATORY)
 
 -include $(PURGATORY_DEPS)
 
-# sha256.c needs to be compiled without optimization, else
-# purgatory fails to execute on ia64.
-purgatory/sha256.o: CFLAGS += -O0
+purgatory/sha256.o: CFLAGS += -O2 $($(ARCH)_PURGATORY_SHA256_CFLAGS)
 
 purgatory/sha256.o: $(srcdir)/util_lib/sha256.c
 	mkdir -p $(@D)

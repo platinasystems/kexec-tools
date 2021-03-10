@@ -18,6 +18,7 @@
 #include "kexec-arm.h"
 #include <arch/options.h>
 #include "../../fs2dt.h"
+#include "iomem.h"
 
 #define MAX_MEMORY_RANGES 64
 #define MAX_LINE 160
@@ -51,9 +52,9 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 		if (count != 2)
 			continue;
 		str = line + consumed;
-		end = end + 1;
 
-		if (memcmp(str, "System RAM\n", 11) == 0) {
+		if (memcmp(str, SYSTEM_RAM_BOOT, strlen(SYSTEM_RAM_BOOT)) == 0 ||
+		    memcmp(str, SYSTEM_RAM, strlen(SYSTEM_RAM)) == 0) {
 			type = RANGE_RAM;
 		}
 		else if (memcmp(str, "reserved\n", 9) == 0) {
@@ -71,6 +72,9 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 	fclose(fp);
 	*range = memory_range;
 	*ranges = memory_ranges;
+
+	dbgprint_mem_range("MEMORY RANGES", *range, *ranges);
+
 	return 0;
 }
 

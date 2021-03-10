@@ -25,22 +25,35 @@
 #define MAP_WINDOW_SIZE (64*1024*1024)
 #define DEV_MEM "/dev/mem"
 
+#define ALIGN_MASK(x,y) (((x) + (y)) & ~(y))
+#define ALIGN(x,y)	ALIGN_MASK(x, (y) - 1)
+
 static void *map_addr(int fd, unsigned long size, off_t offset)
 {
+	unsigned long page_size = getpagesize();
+	unsigned long map_offset = offset & (page_size - 1);
+	size_t len = ALIGN(size + map_offset, page_size);
 	void *result;
-	result = mmap(0, size, PROT_READ, MAP_SHARED, fd, offset);
+
+	result = mmap(0, len, PROT_READ, MAP_SHARED, fd, offset - map_offset);
 	if (result == MAP_FAILED) {
-		fprintf(stderr, "Cannot mmap " DEV_MEM " offset: %llu size: %lu: %s\n",
+		fprintf(stderr, "Cannot mmap " DEV_MEM " offset: %#llx size: %lu: %s\n",
 			(unsigned long long)offset, size, strerror(errno));
 		exit(5);
 	}
-	return result;
+	return result + map_offset;
 }
 
 static void unmap_addr(void *addr, unsigned long size)
 {
+	unsigned long page_size = getpagesize();
+	unsigned long map_offset = (uintptr_t)addr & (page_size - 1);
+	size_t len = ALIGN(size + map_offset, page_size);
 	int ret;
-	ret = munmap(addr, size);
+
+	addr -= map_offset;
+
+	ret = munmap(addr, len);
 	if (ret < 0) {
 		fprintf(stderr, "munmap failed: %s\n",
 			strerror(errno));
@@ -179,6 +192,7 @@ static void *generate_new_headers(
 		}
 		memcpy(nphdr, &phdr[i], sizeof(*nphdr));
 		nphdr->p_offset = offset;
+		nphdr++;
 		offset += phdr[i].p_filesz;
 	}
 	
@@ -270,7 +284,8 @@ int main(int argc, char **argv)
 	}
 	
 	/* Get the program header */
-	phdr = map_addr(fd, sizeof(*phdr)*(ehdr->e_phnum), ehdr->e_phoff);
+	phdr = map_addr(fd, sizeof(*phdr)*(ehdr->e_phnum),
+			start_addr + ehdr->e_phoff);
 
 	/* Collect up the notes */
 	note_bytes = 0;
@@ -286,7 +301,7 @@ int main(int argc, char **argv)
 	for(i = 0; i < ehdr->e_phnum; i++) {
 		unsigned long long offset, size;
 		size_t wsize;
-		if (phdr[i].p_type != PT_NOTE) {
+		if (phdr[i].p_type == PT_NOTE) {
 			continue;
 		}
 		offset = phdr[i].p_offset;
