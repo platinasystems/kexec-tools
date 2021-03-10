@@ -41,6 +41,8 @@
 uint64_t initrd_base, initrd_size;
 unsigned char reuse_initrd = 0;
 const char *ramdisk;
+/* Used for enabling printing message from purgatory code */
+int my_debug = 0;
 
 int elf_ppc64_probe(const char *buf, off_t len)
 {
@@ -82,7 +84,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	size_t size;
 	uint64_t *rsvmap_ptr;
 	struct bootblock *bb_ptr;
-	unsigned int i;
+	int i;
 	int result, opt;
 	uint64_t my_kernel, my_dt_offset;
 	unsigned int my_panic_kernel;
@@ -91,11 +93,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	uint32_t my_run_at_load;
 	unsigned int slave_code[256/sizeof (unsigned int)], master_entry;
 
-#define OPT_APPEND     (OPT_ARCH_MAX+0)
-#define OPT_RAMDISK     (OPT_ARCH_MAX+1)
-#define OPT_DEVICETREEBLOB     (OPT_ARCH_MAX+2)
-#define OPT_ARGS_IGNORE		(OPT_ARCH_MAX+3)
-
+	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "command-line",       1, NULL, OPT_APPEND },
@@ -205,7 +203,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	}
 
 	/* Add v2wrap to the current image */
-	elf_rel_build_load(info, &info->rhdr, (const char *)purgatory,
+	elf_rel_build_load(info, &info->rhdr, purgatory,
 				purgatory_size, 0, max_addr, 1, 0);
 
 	/* Add a ram-disk to the current image
@@ -296,6 +294,8 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	toc_addr = my_r2(&info->rhdr);
 	elf_rel_set_symbol(&info->rhdr, "my_toc", &toc_addr, sizeof(toc_addr));
 
+	/* Set debug */
+	elf_rel_set_symbol(&info->rhdr, "debug", &my_debug, sizeof(my_debug));
 #ifdef DEBUG
 	my_kernel = 0;
 	my_dt_offset = 0;
@@ -304,6 +304,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	my_stack = 0;
 	toc_addr = 0;
 	my_run_at_load = 0;
+	my_debug = 0;
 
 	elf_rel_get_symbol(&info->rhdr, "kernel", &my_kernel, sizeof(my_kernel));
 	elf_rel_get_symbol(&info->rhdr, "dt_offset", &my_dt_offset,
@@ -317,6 +318,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	elf_rel_get_symbol(&info->rhdr, "stack", &my_stack, sizeof(my_stack));
 	elf_rel_get_symbol(&info->rhdr, "my_toc", &toc_addr,
 				sizeof(toc_addr));
+	elf_rel_get_symbol(&info->rhdr, "debug", &my_debug, sizeof(my_debug));
 
 	fprintf(stderr, "info->entry is %p\n", info->entry);
 	fprintf(stderr, "kernel is %llx\n", (unsigned long long)my_kernel);
@@ -329,6 +331,7 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 	fprintf(stderr, "stack is %llx\n", (unsigned long long)my_stack);
 	fprintf(stderr, "toc_addr is %llx\n", (unsigned long long)toc_addr);
 	fprintf(stderr, "purgatory size is %zu\n", purgatory_size);
+	fprintf(stderr, "debug is %d\n", my_debug);
 #endif
 
 	for (i = 0; i < info->nr_segments; i++)
@@ -340,5 +343,11 @@ int elf_ppc64_load(int argc, char **argv, const char *buf, off_t len,
 
 void elf_ppc64_usage(void)
 {
+	fprintf(stderr, "     --command-line=<Command line> command line to append.\n");
+	fprintf(stderr, "     --append=<Command line> same as --command-line.\n");
+	fprintf(stderr, "     --ramdisk=<filename> Initial RAM disk.\n");
+	fprintf(stderr, "     --initrd=<filename> same as --ramdisk.\n");
+	fprintf(stderr, "     --devicetreeblob=<filename> Specify device tree blob file.\n");
+
 	fprintf(stderr, "elf support is still broken\n");
 }

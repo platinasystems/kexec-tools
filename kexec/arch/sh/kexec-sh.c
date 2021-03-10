@@ -22,8 +22,8 @@
 #define MAX_MEMORY_RANGES 64
 static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
-static int kexec_sh_memory_range_callback(void *data, int nr,
-					  char *str,
+static int kexec_sh_memory_range_callback(void *UNUSED(data), int nr,
+					  char *UNUSED(str),
 					  unsigned long base,
 					  unsigned long length)
 {
@@ -73,9 +73,12 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 
 /* Supported file types and callbacks */
 struct file_type file_type[] = {
-       {"zImage-sh", zImage_sh_probe, zImage_sh_load, zImage_sh_usage},
-       {"elf-sh", elf_sh_probe, elf_sh_load, elf_sh_usage},
-       {"netbsd-sh", netbsd_sh_probe, netbsd_sh_load, netbsd_sh_usage},
+	/* uImage is probed before zImage because the latter also accepts
+	   uncompressed images. */
+	{ "uImage-sh", uImage_sh_probe, uImage_sh_load, zImage_sh_usage },
+	{ "zImage-sh", zImage_sh_probe, zImage_sh_load, zImage_sh_usage },
+	{ "elf-sh", elf_sh_probe, elf_sh_load, elf_sh_usage },
+	{ "netbsd-sh", netbsd_sh_probe, netbsd_sh_load, netbsd_sh_usage },
 };
 int file_types = sizeof(file_type) / sizeof(file_type[0]);
 
@@ -94,8 +97,13 @@ void arch_usage(void)
 
 int arch_process_options(int argc, char **argv)
 {
+	/* The common options amongst loaders (e.g. --append) should be read
+	 * here, and the loader-specific options (e.g. NetBSD stuff) should
+	 * then be re-parsed in the loader.
+	 * (e.g. in kexec-netbsd-sh.c, for example.)
+	 */
 	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
+		KEXEC_ALL_OPTIONS
 		{ 0, 			0, NULL, 0 },
 	};
 	static const char short_options[] = KEXEC_ARCH_OPT_STR;
@@ -132,15 +140,15 @@ const struct arch_map_entry arches[] = {
 	{ "sh4", KEXEC_ARCH_DEFAULT },
 	{ "sh4a", KEXEC_ARCH_DEFAULT },
 	{ "sh4al-dsp", KEXEC_ARCH_DEFAULT },
-	{ 0 },
+	{ NULL, 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }
 
-void arch_update_purgatory(struct kexec_info *info)
+void arch_update_purgatory(struct kexec_info *UNUSED(info))
 {
 }
 
@@ -161,10 +169,10 @@ char *get_append(void)
         return append_buf;
 }
 
-void kexec_sh_setup_zero_page(char *zero_page_buf, int zero_page_size,
+void kexec_sh_setup_zero_page(char *zero_page_buf, size_t zero_page_size,
 			      char *cmd_line)
 {
-	int n = zero_page_size - 0x100;
+	size_t n = zero_page_size - 0x100;
 
 	memset(zero_page_buf, 0, zero_page_size);
 

@@ -126,7 +126,6 @@ all: $(TARGETS)
 # collect objects to be removed in 'make clean'
 clean =
 
-# collect objects to be removed in 'make clean'
 dist =	AUTHORS COPYING INSTALL News TODO Makefile.in configure.ac configure \
 	kexec-tools.spec.in config/
 
@@ -201,19 +200,9 @@ $(TARBALL): $(SRCS) $(GENERATED_SRCS)
 $(TARBALL.gz): $(TARBALL)
 	gzip -c < $^ > $@
 
-RPMDIR=rpm
-rpm: $(TARBALL)
-	$(MKDIR) -p $(RPMDIR)/RPM $(RPMDIR)/SRPM $(RPMDIR)/BUILD \
-		$(RPMDIR)/SPECS $(RPMDIR)/TMP $(RPMDIR)/SOURCES
-	unset MAKEFLAGS MAKELEVEL; \
-	$(RPMBUILD) -ta \
-		--define '_rpmdir $(RPMDIR)/RPM' \
-		--define '_srcrpmdir $(RPMDIR)/SRPM' \
-		--define '_builddir $(RPMDIR)/BUILD' \
-		--define '_specdir $(RPMDIR)/SPECS' \
-		--define '_tmppath $(RPMDIR)/TMP' \
-		--define '_sourcedir $(RPMDIR)/SOURCES' \
-		$(TARBALL)
+rpm: $(TARBALL.gz)
+	unset MAKEFLAGS MAKELEVEL;
+	$(RPMBUILD) -ta $(TARBALL.gz)
 
 $(SPEC): kexec-tools.spec.in Makefile
 	$(SED) -e 's,^Version: $$,Version: $(PACKAGE_VERSION),' $< > $@
@@ -228,14 +217,14 @@ echo::
 
 clean:
 	$(RM) -f $(clean)
-	$(RM) -rf rpm build
+	$(RM) -rf build
 	$(RM) -f $(TARBALL) $(TARBALL.gz)
 
 distclean: dist-clean
 
 dist-clean: clean
 	$(RM) -f config.log config.status config.cache Makefile include/config.h
-	$(RM) -f include/config.h.in configure
+	$(RM) -f include/config.h.in configure $(SPEC)
 	$(RM) -rf autom4te.cache
 
 install: $(TARGETS)

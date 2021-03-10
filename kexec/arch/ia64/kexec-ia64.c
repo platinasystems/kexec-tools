@@ -101,7 +101,7 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 	while(fgets(line, sizeof(line), fp) != 0) {
 		unsigned long start, end;
 		char *str;
-		int type;
+		unsigned type;
 		int consumed;
 		int count;
 		if (memory_ranges >= max_memory_ranges)
@@ -180,52 +180,38 @@ void arch_usage(void)
 
 int arch_process_options(int argc, char **argv)
 {
-	static const struct option options[] = {
-		KEXEC_ARCH_OPTIONS
-		{ 0, 0, NULL, 0 },
-	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR;
-	int opt;
+	/* This doesn't belong here!  Some sort of arch_init() ? */
 
 	/* execute from monarch processor */
-        cpu_set_t affinity;
+	cpu_set_t affinity;
 	CPU_ZERO(&affinity);
 	CPU_SET(0, &affinity);
-        sched_setaffinity(0, sizeof(affinity), &affinity);
+	sched_setaffinity(0, sizeof(affinity), &affinity);
 
-	opterr = 0; /* Don't complain about unrecognized options here */
-	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
-		switch(opt) {
-		default:
-			break;
-		}
-	}
-	/* Reset getopt for the next pass; called in other source modules */
-	opterr = 1;
-	optind = 1;
 	return 0;
 }
 
 const struct arch_map_entry arches[] = {
 	{ "ia64", KEXEC_ARCH_IA_64 },
-	{ 0 },
+	{ NULL, 0 },
 };
 
-int arch_compat_trampoline(struct kexec_info *info)
+int arch_compat_trampoline(struct kexec_info *UNUSED(info))
 {
 	return 0;
 }
 
-int update_loaded_segments(struct kexec_info *info, struct mem_ehdr *ehdr)
+int update_loaded_segments(struct mem_ehdr *ehdr)
 {
 	int i;
+	unsigned u;
 	struct mem_phdr *phdr;
 	unsigned long start_addr = ULONG_MAX, end_addr = 0;
 	unsigned long align = 1UL<<26; /* 64M */
 	unsigned long start, end;
 
-	for (i = 0; i < ehdr->e_phnum; i++) {
-		phdr = &ehdr->e_phdr[i];
+	for (u = 0; u < ehdr->e_phnum; u++) {
+		phdr = &ehdr->e_phdr[u];
 		if (phdr->p_type != PT_LOAD)
 			continue;
 		if (phdr->p_paddr < start_addr)
@@ -247,7 +233,7 @@ int update_loaded_segments(struct kexec_info *info, struct mem_ehdr *ehdr)
 		start = (memory_range[i].start + align - 1) & ~(align - 1);
 		end = memory_range[i].end;
 		if (end > start && (end - start) > (end_addr - start_addr)) {
-		    move_loaded_segments(info, ehdr, start);
+		    move_loaded_segments(ehdr, start);
 			return 0;
 		}
 	}
@@ -255,7 +241,7 @@ int update_loaded_segments(struct kexec_info *info, struct mem_ehdr *ehdr)
 	return -1;
 }
 
-void arch_update_purgatory(struct kexec_info *info)
+void arch_update_purgatory(struct kexec_info *UNUSED(info))
 {
 }
 

@@ -26,7 +26,7 @@ struct crash_elf_info {
 	unsigned long backup_src_start;
 	unsigned long backup_src_end;
 
-	unsigned long page_offset;
+	unsigned long long page_offset;
 	unsigned long lowmem_limit;
 
 	int (*get_note_info)(int cpu, uint64_t *addr, uint64_t *len);
@@ -45,6 +45,9 @@ int crash_create_elf64_headers(struct kexec_info *info,
 			       unsigned long align);
 
 unsigned long crash_architecture(struct crash_elf_info *elf_info);
+
+unsigned long phys_to_virt(struct crash_elf_info *elf_info,
+			   unsigned long paddr);
 
 int xen_present(void);
 unsigned long xen_architecture(struct crash_elf_info *elf_info);

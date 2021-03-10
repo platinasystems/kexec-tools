@@ -13,6 +13,7 @@
 #define _GNU_SOURCE
 
 #include "kexec-elf.h"
+#include "unused.h"
 
 #ifndef BYTE_ORDER
 #error BYTE_ORDER not defined
@@ -225,7 +226,7 @@ extern void arch_reuse_initrd(void);
 
 extern int ifdown(void);
 
-extern unsigned char purgatory[];
+extern char purgatory[];
 extern size_t purgatory_size;
 
 #define BOOTLOADER "kexec"
@@ -248,6 +249,8 @@ int kexec_iomem_for_each_line(char *match,
 int parse_iomem_single(char *str, uint64_t *start, uint64_t *end);
 const char * proc_iomem(void);
 
+int arch_init(void);
+
 extern int add_backup_segments(struct kexec_info *info,
 			       unsigned long backup_base,
 			       unsigned long backup_size);
@@ -258,7 +261,9 @@ extern int add_backup_segments(struct kexec_info *info,
 #define dbgprintf(_args...) do {printf(_args);} while(0)
 #else
 static inline int __attribute__ ((format (printf, 1, 2)))
-	dbgprintf(const char *fmt, ...) {return 0;}
+	dbgprintf(const char *UNUSED(fmt), ...) {return 0;}
 #endif
+
+char *concat_cmdline(const char *base, const char *append);
 
 #endif /* KEXEC_H */

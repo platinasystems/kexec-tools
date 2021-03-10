@@ -36,15 +36,6 @@
 #include "crashdump-x86_64.h"
 #include <x86/x86-linux.h>
 
-static struct crash_elf_info elf_info =
-{
-	class: ELFCLASS64,
-	data: ELFDATA2LSB,
-	machine: EM_X86_64,
-	backup_src_start: BACKUP_SRC_START,
-	backup_src_end: BACKUP_SRC_END,
-	page_offset: PAGE_OFFSET,
-};
 
 /* Forward Declaration. */
 static int exclude_region(int *nr_ranges, uint64_t start, uint64_t end);
@@ -161,7 +152,8 @@ static struct memory_range crash_reserved_mem;
  * to look into down the line. May be something like /proc/kernelmem or may
  * be zone data structures exported from kernel.
  */
-static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
+static int get_crash_memory_ranges(struct memory_range **range, int *ranges,
+				   int kexec_flags)
 {
 	const char *iomem= proc_iomem();
 	int memory_ranges = 0, gart = 0;
@@ -179,10 +171,12 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 
 	/* First entry is for first 640K region. Different bios report first
 	 * 640K in different manner hence hardcoding it */
-	crash_memory_range[0].start = 0x00000000;
-	crash_memory_range[0].end = 0x0009ffff;
-	crash_memory_range[0].type = RANGE_RAM;
-	memory_ranges++;
+	if (!(kexec_flags & KEXEC_PRESERVE_CONTEXT)) {
+		crash_memory_range[0].start = 0x00000000;
+		crash_memory_range[0].end = 0x0009ffff;
+		crash_memory_range[0].type = RANGE_RAM;
+		memory_ranges++;
+	}
 
 	while(fgets(line, sizeof(line), fp) != 0) {
 		char *str;
@@ -230,7 +224,7 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 		}
 
 		/* First 640K already registered */
-		if (start >= 0x00000000 && end <= 0x0009ffff)
+		if (end <= 0x0009ffff)
 			continue;
 
 		crash_memory_range[memory_ranges].start = start;
@@ -239,6 +233,22 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 		memory_ranges++;
 	}
 	fclose(fp);
+	if (kexec_flags & KEXEC_PRESERVE_CONTEXT) {
+		int i;
+		for (i = 0; i < memory_ranges; i++) {
+			if (crash_memory_range[i].end > 0x0009ffff) {
+				crash_reserved_mem.start = \
+					crash_memory_range[i].start;
+				break;
+			}
+		}
+		if (crash_reserved_mem.start >= mem_max) {
+			fprintf(stderr, "Too small mem_max: 0x%llx.\n", mem_max);
+			return -1;
+		}
+		crash_reserved_mem.end = mem_max;
+		crash_reserved_mem.type = RANGE_RAM;
+	}
 	if (exclude_region(&memory_ranges, crash_reserved_mem.start,
 				crash_reserved_mem.end) < 0)
 		return -1;
@@ -267,7 +277,7 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 static int exclude_region(int *nr_ranges, uint64_t start, uint64_t end)
 {
 	int i, j, tidx = -1;
-	struct memory_range temp_region;
+	struct memory_range temp_region = { 0, 0, 0 };
 
 	for (i = 0; i < (*nr_ranges); i++) {
 		unsigned long long mstart, mend;
@@ -366,7 +376,7 @@ static int delete_memmap(struct memory_range *memmap_p, unsigned long long addr,
 {
 	int i, j, nr_entries = 0, tidx = -1, operation = 0, align = 1024;
 	unsigned long long mstart, mend;
-	struct memory_range temp_region;
+	struct memory_range temp_region = { 0, 0, 0 };
 
 	/* Do alignment check. */
 	if ((addr%align) || (size%align))
@@ -468,7 +478,8 @@ static void ultoa(unsigned long i, char *str)
  * memory regions the new kernel can use to boot into. */
 static int cmdline_add_memmap(char *cmdline, struct memory_range *memmap_p)
 {
-	int i, cmdlen, len, min_sizek = 100;
+	int i, cmdlen, len;
+	unsigned long min_sizek = 100;
 	char str_mmap[256], str_tmp[20];
 
 	/* Exact map */
@@ -580,9 +591,19 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 				unsigned long max_addr, unsigned long min_base)
 {
 	void *tmp;
-	unsigned long sz, elfcorehdr;
+	unsigned long sz, bufsz, memsz, elfcorehdr;
 	int nr_ranges, align = 1024, i;
 	struct memory_range *mem_range, *memmap_p;
+
+	struct crash_elf_info elf_info =
+	{
+		class: ELFCLASS64,
+		data: ELFDATA2LSB,
+		machine: EM_X86_64,
+		backup_src_start: BACKUP_SRC_START,
+		backup_src_end: BACKUP_SRC_END,
+		page_offset: page_offset,
+	};
 
 	if (get_kernel_paddr(info))
 		return -1;
@@ -590,7 +611,8 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	if (get_kernel_vaddr_and_size(info))
 		return -1;
 
-	if (get_crash_memory_ranges(&mem_range, &nr_ranges) < 0)
+	if (get_crash_memory_ranges(&mem_range, &nr_ranges,
+				    info->kexec_flags) < 0)
 		return -1;
 
 	/* Memory regions which panic kernel can safely use to boot into */
@@ -602,20 +624,23 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	add_memmap(memmap_p, crash_reserved_mem.start, sz);
 
 	/* Create a backup region segment to store backup data*/
-	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
-	tmp = xmalloc(sz);
-	memset(tmp, 0, sz);
-	info->backup_start = add_buffer(info, tmp, sz, sz, align,
-				0, max_addr, 1);
-	if (delete_memmap(memmap_p, info->backup_start, sz) < 0)
-		return -1;
+	if (!(info->kexec_flags & KEXEC_PRESERVE_CONTEXT)) {
+		sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
+		tmp = xmalloc(sz);
+		memset(tmp, 0, sz);
+		info->backup_start = add_buffer(info, tmp, sz, sz, align,
+						0, max_addr, 1);
+		if (delete_memmap(memmap_p, info->backup_start, sz) < 0)
+			return -1;
+	}
 
 	/* Create elf header segment and store crash image data. */
 	if (crash_create_elf64_headers(info, &elf_info,
 				       crash_memory_range, nr_ranges,
-				       &tmp, &sz,
+				       &tmp, &bufsz,
 				       ELF_CORE_HEADER_ALIGN) < 0)
 		return -1;
+	/* the size of the elf headers allocated is returned in 'bufsz' */
 
 	/* Hack: With some ld versions (GNU ld version 2.14.90.0.4 20030523),
 	 * vmlinux program headers show a gap of two pages between bss segment
@@ -624,9 +649,15 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	 * elf core header segment to 16K to avoid being placed in such gaps.
 	 * This is a makeshift solution until it is fixed in kernel.
 	 */
-	elfcorehdr = add_buffer(info, tmp, sz, 16*1024, align, min_base,
+	if (bufsz < (16*1024))
+		/* bufsize is big enough for all the PT_NOTE's and PT_LOAD's */
+		memsz = 16*1024;
+		/* memsz will be the size of the memory hole we look for */
+	else
+		memsz = bufsz;
+	elfcorehdr = add_buffer(info, tmp, bufsz, memsz, align, min_base,
 							max_addr, -1);
-	if (delete_memmap(memmap_p, elfcorehdr, sz) < 0)
+	if (delete_memmap(memmap_p, elfcorehdr, memsz) < 0)
 		return -1;
 	cmdline_add_memmap(mod_cmdline, memmap_p);
 	cmdline_add_elfcorehdr(mod_cmdline, elfcorehdr);

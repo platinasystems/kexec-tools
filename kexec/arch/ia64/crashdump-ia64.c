@@ -71,10 +71,9 @@ static int seg_comp(const void *a, const void *b)
 
 /* purgatory code need this info to patch the EFI memmap
  */
-static void add_loaded_segments_info(struct kexec_info *info,
-	struct mem_ehdr *ehdr, unsigned long max_addr)
+static void add_loaded_segments_info(struct mem_ehdr *ehdr)
 {
-	 int i;
+	 unsigned i;
          for(i = 0; i < ehdr->e_phnum; i++) {
                 struct mem_phdr *phdr;
                 phdr = &ehdr->e_phdr[i];
@@ -153,7 +152,7 @@ static int exclude_crash_reserve_region(int *nr_ranges)
 	return 0;
 }
 
-static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
+static int get_crash_memory_ranges(int *ranges)
 {
 	const char *iomem = proc_iomem();
         char line[MAX_LINE];
@@ -231,13 +230,12 @@ int load_crashdump_segments(struct kexec_info *info, struct mem_ehdr *ehdr,
                             unsigned long max_addr, unsigned long min_base,
 			    const char **cmdline)
 {
-	struct memory_range *mem_range;
 	int nr_ranges;
 	unsigned long sz;
 	size_t size;
 	void *tmp;
 	if (info->kexec_flags & KEXEC_ON_CRASH &&
-	    get_crash_memory_ranges(&mem_range, &nr_ranges) == 0) {
+	    get_crash_memory_ranges(&nr_ranges) == 0) {
 		int i;
 
 		info->kern_paddr_start = kernel_code_start;
@@ -265,7 +263,7 @@ int load_crashdump_segments(struct kexec_info *info, struct mem_ehdr *ehdr,
 		loaded_segments_num++;
 		cmdline_add_elfcorehdr(cmdline, elfcorehdr);
 	}
-	add_loaded_segments_info(info, ehdr, max_addr);
+	add_loaded_segments_info(ehdr);
 	size = sizeof(struct loaded_segment) * loaded_segments_num;
 	qsort(loaded_segments, loaded_segments_num,
                         sizeof(struct loaded_segment), seg_comp);

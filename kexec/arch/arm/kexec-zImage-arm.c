@@ -10,11 +10,14 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <getopt.h>
+#include <unistd.h>
 #include <arch/options.h>
 #include "../../kexec.h"
+#include "../../kexec-syscall.h"
+#include "crashdump-arm.h"
 
-#define COMMAND_LINE_SIZE 1024
 #define BOOT_PARAMS_SIZE 1536
 
 struct tag_header {
@@ -78,7 +81,7 @@ struct tag {
 #define byte_size(t)    ((t)->hdr.size << 2)
 #define tag_size(type)  ((sizeof(struct tag_header) + sizeof(struct type) + 3) >> 2)
 
-int zImage_arm_probe(const char *buf, off_t len)
+int zImage_arm_probe(const char *UNUSED(buf), off_t UNUSED(len))
 {
 	/* 
 	 * Only zImage loading is supported. Do not check if
@@ -109,7 +112,11 @@ struct tag * atag_read_tags(void)
 		return NULL;
 	}
 
-	fread(buf, sizeof(buf[1]), BOOT_PARAMS_SIZE, fp);
+	if (!fread(buf, sizeof(buf[1]), BOOT_PARAMS_SIZE, fp)) {
+		fclose(fp);
+		return NULL;
+	}
+
 	if (ferror(fp)) {
 		fprintf(stderr, "Cannot read %s: %s\n",
 			fn, strerror(errno));
@@ -125,13 +132,13 @@ struct tag * atag_read_tags(void)
 static
 int atag_arm_load(struct kexec_info *info, unsigned long base,
 	const char *command_line, off_t command_line_len,
-	const char *initrd, off_t initrd_len)
+	const char *initrd, off_t initrd_len, off_t initrd_off)
 {
 	struct tag *saved_tags = atag_read_tags();
 	char *buf;
 	off_t len;
 	struct tag *params;
-	uint32_t *initrd_start;
+	uint32_t *initrd_start = NULL;
 	
 	buf = xmalloc(getpagesize());
 	if (!buf) {
@@ -191,10 +198,8 @@ int atag_arm_load(struct kexec_info *info, unsigned long base,
 	add_segment(info, buf, len, base, len);
 
 	if (initrd) {
-		struct memory_range *range;
-		int ranges;
-		get_memory_ranges(&range, &ranges, info->kexec_flags);
-		*initrd_start = locate_hole(info, initrd_len, getpagesize(), range[0].start + 0x800000, ULONG_MAX, INT_MAX);
+		*initrd_start = locate_hole(info, initrd_len, getpagesize(),
+				initrd_off, ULONG_MAX, INT_MAX);
 		if (*initrd_start == ULONG_MAX)
 			return -1;
 		add_segment(info, initrd, initrd_len, *initrd_start, initrd_len);
@@ -210,13 +215,14 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	unsigned int atag_offset = 0x1000; /* 4k offset from memory start */
 	unsigned int offset = 0x8000;      /* 32k offset from memory start */
 	const char *command_line;
+	char *modified_cmdline = NULL;
 	off_t command_line_len;
 	const char *ramdisk;
 	char *ramdisk_buf;
 	off_t ramdisk_length;
+	off_t ramdisk_offset;
 	int opt;
-#define OPT_APPEND	'a'
-#define OPT_RAMDISK	'r'
+	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "command-line",	1, 0, OPT_APPEND },
@@ -262,13 +268,58 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		ramdisk_buf = slurp_file(ramdisk, &ramdisk_length);
 	}
 
-	base = locate_hole(info,len+offset,0,0,ULONG_MAX,INT_MAX);
+	/*
+	 * If we are loading a dump capture kernel, we need to update kernel
+	 * command line and also add some additional segments.
+	 */
+	if (info->kexec_flags & KEXEC_ON_CRASH) {
+		uint64_t start, end;
+
+		modified_cmdline = xmalloc(COMMAND_LINE_SIZE);
+		if (!modified_cmdline)
+			return -1;
+
+		if (command_line) {
+			(void) strncpy(modified_cmdline, command_line,
+				       COMMAND_LINE_SIZE);
+			modified_cmdline[COMMAND_LINE_SIZE - 1] = '\0';
+		}
+
+		if (load_crashdump_segments(info, modified_cmdline) < 0) {
+			free(modified_cmdline);
+			return -1;
+		}
+
+		command_line = modified_cmdline;
+		command_line_len = strlen(command_line) + 1;
+
+		/*
+		 * We put the dump capture kernel at the start of crashkernel
+		 * reserved memory.
+		 */
+		if (parse_iomem_single("Crash kernel\n", &start, &end)) {
+			/*
+			 * No crash kernel memory reserved. We cannot do more
+			 * but just bail out.
+			 */
+			return -1;
+		}
+		base = start;
+	} else {
+		base = locate_hole(info,len+offset,0,0,ULONG_MAX,INT_MAX);
+	}
+
 	if (base == ULONG_MAX)
 		return -1;
 
+	/* assume the maximum kernel compression ratio is 4,
+	 * and just to be safe, place ramdisk after that
+	 */
+	ramdisk_offset = base + len * 4;
+
 	if (atag_arm_load(info, base + atag_offset,
 			 command_line, command_line_len,
-			 ramdisk_buf, ramdisk_length)    == -1)
+			 ramdisk_buf, ramdisk_length, ramdisk_offset) == -1)
 		return -1;
 
 	add_segment(info, buf, len, base + offset, len);

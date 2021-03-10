@@ -44,7 +44,7 @@ static const int probe_debug = 0;
 int bzImage_probe(const char *buf, off_t len)
 {
 	struct x86_linux_header header;
-	if (len < sizeof(header)) {
+	if ((uintmax_t)len < (uintmax_t)sizeof(header)) {
 		return -1;
 	}
 	memcpy(&header, buf, sizeof(header));
@@ -119,7 +119,7 @@ int do_bzImage_load(struct kexec_info *info,
 	/*
 	 * Find out about the file I am about to load.
 	 */
-	if (kernel_len < sizeof(setup_header)) {
+	if ((uintmax_t)kernel_len < (uintmax_t)sizeof(setup_header)) {
 		return -1;
 	}
 	memcpy(&setup_header, kernel, sizeof(setup_header));
@@ -136,7 +136,8 @@ int do_bzImage_load(struct kexec_info *info,
 	}
 
 	if (setup_header.protocol_version >= 0x0206) {
-		if (command_line_len > setup_header.cmdline_size) {
+		if ((uintmax_t)command_line_len >
+		    (uintmax_t)setup_header.cmdline_size) {
 			dbgprintf("Kernel command line too long for kernel!\n");
 			return -1;
 		}
@@ -199,10 +200,10 @@ int do_bzImage_load(struct kexec_info *info,
 	 * overflow takes place while applying relocations.
 	 */
 	if (!real_mode_entry && relocatable_kernel)
-		elf_rel_build_load(info, &info->rhdr, (char *) purgatory, purgatory_size,
+		elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
 					0x3000, 0x7fffffff, -1, 0);
 	else
-		elf_rel_build_load(info, &info->rhdr, (char *) purgatory, purgatory_size,
+		elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
 					0x3000, 640*1024, -1, 0);
 	dbgprintf("Loaded purgatory at addr 0x%lx\n", info->rhdr.rel_addr);
 	/* The argument/parameter segment */
@@ -263,7 +264,7 @@ int do_bzImage_load(struct kexec_info *info,
 	/* Tell the kernel what is going on */
 	setup_linux_bootloader_parameters(info, real_mode, setup_base,
 		kern16_size, command_line, command_line_len,
-		(unsigned char *) initrd, initrd_len);
+		initrd, initrd_len);
 
 	/* Get the initial register values */
 	elf_rel_get_symbol(&info->rhdr, "entry16_regs", &regs16, sizeof(regs16));
@@ -332,24 +333,22 @@ int do_bzImage_load(struct kexec_info *info,
 int bzImage_load(int argc, char **argv, const char *buf, off_t len, 
 	struct kexec_info *info)
 {
-	const char *command_line;
-	const char *ramdisk;
+	char *command_line = NULL;
+	const char *ramdisk, *append = NULL;
 	char *ramdisk_buf;
 	off_t ramdisk_length;
 	int command_line_len;
 	int debug, real_mode_entry;
 	int opt;
 	int result;
-#define OPT_APPEND		(OPT_ARCH_MAX+0)
-#define OPT_REUSE_CMDLINE	(OPT_ARCH_MAX+1)
-#define OPT_RAMDISK		(OPT_ARCH_MAX+2)
-#define OPT_REAL_MODE		(OPT_ARCH_MAX+3)
+
+	/* See options.h -- add any more there, too. */
 	static const struct option options[] = {
 		KEXEC_ARCH_OPTIONS
 		{ "debug",		0, 0, OPT_DEBUG },
 		{ "command-line",	1, 0, OPT_APPEND },
 		{ "append",		1, 0, OPT_APPEND },
-		{ "reuse-cmdline",	1, 0, OPT_REUSE_CMDLINE },
+		{ "reuse-cmdline",	0, 0, OPT_REUSE_CMDLINE },
 		{ "initrd",		1, 0, OPT_RAMDISK },
 		{ "ramdisk",		1, 0, OPT_RAMDISK },
 		{ "real-mode",		0, 0, OPT_REAL_MODE },
@@ -362,7 +361,6 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 	 */
 	debug = 0;
 	real_mode_entry = 0;
-	command_line = 0;
 	ramdisk = 0;
 	ramdisk_length = 0;
 	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1) {
@@ -379,7 +377,7 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 			debug = 1;
 			break;
 		case OPT_APPEND:
-			command_line = optarg;
+			append = optarg;
 			break;
 		case OPT_REUSE_CMDLINE:
 			command_line = get_command_line();
@@ -392,6 +390,7 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 			break;
 		}
 	}
+	command_line = concat_cmdline(command_line, append);
 	command_line_len = 0;
 	if (command_line) {
 		command_line_len = strlen(command_line) +1;
@@ -406,5 +405,6 @@ int bzImage_load(int argc, char **argv, const char *buf, off_t len,
 		ramdisk_buf, ramdisk_length,
 		real_mode_entry, debug);
 
+	free(command_line);
 	return result;
 }
