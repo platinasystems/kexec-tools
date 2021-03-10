@@ -1,15 +1,14 @@
 #ifndef CRASHDUMP_H
 #define CRASHDUMP_H
 
-int get_crashkernel_region(uint64_t *start, uint64_t *end);
 extern int get_crash_notes_per_cpu(int cpu, uint64_t *addr, uint64_t *len);
 extern int get_kernel_vmcoreinfo(uint64_t *addr, uint64_t *len);
 extern int get_xen_vmcoreinfo(uint64_t *addr, uint64_t *len);
 
 /* Need to find a better way to determine per cpu notes section size. */
 #define MAX_NOTE_BYTES		1024
-/* Expecting ELF headers to fit in 32K. Increase it if you need more. */
-#define KCORE_ELF_HEADERS_SIZE  32768
+/* Expecting ELF headers to fit in 64K. Increase it if you need more. */
+#define KCORE_ELF_HEADERS_SIZE  65536
 /* The address of the ELF header is passed to the secondary kernel
  * using the kernel command line option memmap=nnn.
  * The smallest unit the kernel accepts is in kilobytes,

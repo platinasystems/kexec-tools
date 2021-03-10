@@ -55,7 +55,7 @@ char *slurp_ramdisk_ppc(const char *filename, off_t *r_size)
 {
 	struct Image_info img;
 	off_t size;
-	const unsigned char *buf = slurp_file(filename, &size);
+	const char *buf = slurp_file(filename, &size);
 	int rc;
 
 	/* Check if this is a uImage RAMDisk */
@@ -306,7 +306,7 @@ out:
 	if (!tmp_cmdline)
 		free(command_line);
 	if (error_msg)
-		die(error_msg);
+		die("%s", error_msg);
 	return ret;
 }
 

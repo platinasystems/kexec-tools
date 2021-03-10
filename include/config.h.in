@@ -6,6 +6,9 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
+/* The kexec_status call is available */
+#undef HAVE_KEXEC_CMD_STATUS
+
 /* Define to 1 if you have the `lzma' library (-llzma). */
 #undef HAVE_LIBLZMA
 
