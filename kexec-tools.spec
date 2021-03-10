@@ -1,6 +1,6 @@
 Summary: Load one kernel from another
 Name: kexec-tools
-Version: 2.0.7
+Version: 2.0.9
 Release: 0
 License: GPL
 Group: Development/Tools
