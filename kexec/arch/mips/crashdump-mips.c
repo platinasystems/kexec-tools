@@ -60,9 +60,7 @@ static int get_kernel_paddr(struct crash_elf_info *elf_info)
 
 	if (parse_iomem_single("Kernel code\n", &start, NULL) == 0) {
 		elf_info->kern_paddr_start = start;
-#ifdef DEBUG
-		printf("kernel load physical addr start = 0x%lx\n", start);
-#endif
+		dbgprintf("kernel load physical addr start = 0x%lx\n", start);
 		return 0;
 	}
 
@@ -82,12 +80,10 @@ static int get_kernel_vaddr_and_size(struct crash_elf_info *elf_info,
 					start_offset;
 	if (parse_iomem_single("Kernel data\n", NULL, &end) == 0) {
 		elf_info->kern_size = end - elf_info->kern_paddr_start;
-#ifdef DEBUG
-		printf("kernel_vaddr= 0x%llx paddr %llx\n",
+		dbgprintf("kernel_vaddr= 0x%llx paddr %llx\n",
 				elf_info->kern_vaddr_start,
 				elf_info->kern_paddr_start);
-		printf("kernel size = 0x%llx\n", elf_info->kern_size);
-#endif
+		dbgprintf("kernel size = 0x%lx\n", elf_info->kern_size);
 		return 0;
 		}
 	fprintf(stderr, "Cannot determine kernel virtual load addr and  size\n");
@@ -360,7 +356,7 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 #ifdef __mips64
 	if (arch_options.core_header_type == CORE_TYPE_ELF64) {
 		elf_info = &elf_info64;
-		crash_create = crash_create_elf64;
+		crash_create = crash_create_elf64_headers;
 		start_offset = 0xffffffff80000000UL;
 	}
 #endif
@@ -377,7 +373,7 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	info->backup_src_start = BACKUP_SRC_START;
 	info->backup_src_size = BACKUP_SRC_SIZE;
 	/* Create a backup region segment to store backup data*/
-	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
+	sz = _ALIGN(BACKUP_SRC_SIZE, align);
 	tmp = xmalloc(sz);
 	memset(tmp, 0, sz);
 	info->backup_start = add_buffer(info, tmp, sz, sz, align,
@@ -400,11 +396,9 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	cmdline_add_elfcorehdr(mod_cmdline, elfcorehdr);
 	cmdline_add_savemaxmem(mod_cmdline, saved_max_mem);
 
-#ifdef DEBUG
-	printf("CRASH MEMORY RANGES:\n");
-	printf("%016Lx-%016Lx\n", crash_reserved_mem.start,
+	dbgprintf("CRASH MEMORY RANGES:\n");
+	dbgprintf("%016Lx-%016Lx\n", crash_reserved_mem.start,
 			crash_reserved_mem.end);
-#endif
 	return 0;
 }
 

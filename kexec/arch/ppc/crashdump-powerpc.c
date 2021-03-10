@@ -132,8 +132,9 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 				goto err;
 			}
 			n = read_memory_region_limits(fd, &start, &end);
+			/* We are done with fd, close it. */
+			close(fd);
 			if (n != 0) {
-				close(fd);
 				closedir(dmem);
 				closedir(dir);
 				goto err;
@@ -153,8 +154,16 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 			cstart = crash_base;
 			cend = crash_base + crash_size;
 			/*
-			 * Exclude the region that lies within crashkernel
+			 * Exclude the region that lies within crashkernel.
+			 * If memory limit is set then exclude memory region
+			 * above it.
 			 */
+			if (memory_limit) {
+				if (start >= memory_limit)
+					continue;
+				if (end > memory_limit)
+					end = memory_limit;
+			}
 			if (cstart < end && cend > start) {
 				if (start < cstart && end > cend) {
 					crash_memory_range[memory_ranges].start
@@ -195,7 +204,6 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 					= RANGE_RAM;
 				memory_ranges++;
 			}
-			close(fd);
 		}
 		closedir(dmem);
 	}
@@ -226,15 +234,15 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 
 	*range = crash_memory_range;
 	*ranges = memory_ranges;
-#if DEBUG
+
 	int j;
-	printf("CRASH MEMORY RANGES\n");
+	dbgprintf("CRASH MEMORY RANGES\n");
 	for (j = 0; j < *ranges; j++) {
 		start = crash_memory_range[j].start;
 		end = crash_memory_range[j].end;
-		fprintf(stderr, "%016Lx-%016Lx\n", start, end);
+		dbgprintf("%016Lx-%016Lx\n", start, end);
 	}
-#endif
+
 	return 0;
 
 err:
@@ -262,10 +270,19 @@ static void ulltoa(unsigned long long i, char *str)
 	}
 }
 
+/* Append str to cmdline */
+static void add_cmdline(char *cmdline, char *str)
+{
+	int cmdlen = strlen(cmdline) + strlen(str);
+	if (cmdlen > (COMMAND_LINE_SIZE - 1))
+		die("Command line overflow\n");
+	strcat(cmdline, str);
+}
+
 static int add_cmdline_param(char *cmdline, unsigned long long addr,
 				char *cmdstr, char *byte)
 {
-	int cmdlen, len, align = 1024;
+	int align = 1024;
 	char str[COMMAND_LINE_SIZE], *ptr;
 
 	/* Passing in =xxxK / =xxxM format. Saves space required in cmdline.*/
@@ -284,14 +301,11 @@ static int add_cmdline_param(char *cmdline, unsigned long long addr,
 	ptr += strlen(str);
 	ulltoa(addr, ptr);
 	strcat(str, byte);
-	len = strlen(str);
-	cmdlen = strlen(cmdline) + len;
-	if (cmdlen > (COMMAND_LINE_SIZE - 1))
-		die("Command line overflow\n");
-	strcat(cmdline, str);
-#if DEBUG
-	fprintf(stderr, "Command line after adding elfcorehdr: %s\n", cmdline);
-#endif
+
+	add_cmdline(cmdline, str);
+
+	dbgprintf("Command line after adding elfcorehdr: %s\n", cmdline);
+
 	return 0;
 }
 
@@ -315,7 +329,7 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 	info->backup_src_size = BACKUP_SRC_SIZE;
 #ifndef CONFIG_BOOKE
 	/* Create a backup region segment to store backup data*/
-	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
+	sz = _ALIGN(BACKUP_SRC_SIZE, align);
 	tmp = xmalloc(sz);
 	memset(tmp, 0, sz);
 	info->backup_start = add_buffer(info, tmp, sz, sz, align,
@@ -365,6 +379,7 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 	 */
 	add_cmdline_param(mod_cmdline, elfcorehdr, " elfcorehdr=", "K");
 	add_cmdline_param(mod_cmdline, saved_max_mem, " savemaxmem=", "M");
+	add_cmdline(mod_cmdline, " maxcpus=1");
 	return 0;
 }
 
@@ -403,10 +418,8 @@ void add_usable_mem_rgns(unsigned long long base, unsigned long long size)
 	usablemem_rgns.ranges[usablemem_rgns.size].start = base;
 	usablemem_rgns.ranges[usablemem_rgns.size++].end = end;
 
-#ifdef DEBUG
-	fprintf(stderr, "usable memory rgns size:%u base:%llx size:%llx\n",
+	dbgprintf("usable memory rgns size:%u base:%llx size:%llx\n",
 		usablemem_rgns.size, base, size);
-#endif
 }
 
 int is_crashkernel_mem_reserved(void)

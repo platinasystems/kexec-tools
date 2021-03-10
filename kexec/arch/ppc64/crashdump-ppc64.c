@@ -84,10 +84,19 @@ static unsigned long long cstart, cend;
 static int memory_ranges;
 
 /*
- * Exclude the region that lies within crashkernel
+ * Exclude the region that lies within crashkernel and above the memory
+ * limit which is reflected by mem= kernel option.
  */
 static void exclude_crash_region(uint64_t start, uint64_t end)
 {
+	/* If memory_limit is set then exclude the memory region above it. */
+	if (memory_limit) {
+		if (start >= memory_limit)
+			return;
+		if (end > memory_limit)
+			end = memory_limit;
+	}
+
 	if (cstart < end && cend > start) {
 		if (start < cstart && end > cend) {
 			crash_memory_range[memory_ranges].start = start;
@@ -289,7 +298,7 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 		 * to the next page size boundary though, so makedumpfile can
 		 * read it safely without going south on us.
 		 */
-		cend = (cend + page_size - 1) & (~(page_size - 1));
+		cend = _ALIGN(cend, page_size);
 
 		crash_memory_range[memory_ranges].start = cstart;
 		crash_memory_range[memory_ranges++].end = cend;
@@ -304,15 +313,15 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 
 	*range = crash_memory_range;
 	*ranges = memory_ranges;
-#if DEBUG
+
 	int j;
-	printf("CRASH MEMORY RANGES\n");
+	dbgprintf("CRASH MEMORY RANGES\n");
 	for(j = 0; j < *ranges; j++) {
 		start = crash_memory_range[j].start;
 		end = crash_memory_range[j].end;
-		fprintf(stderr, "%016Lx-%016Lx\n", start, end);
+		dbgprintf("%016Lx-%016Lx\n", start, end);
 	}
-#endif
+
 	return 0;
 
 err:
@@ -367,9 +376,7 @@ static int add_cmdline_param(char *cmdline, uint64_t addr, char *cmdstr,
 	if (cmdlen > (COMMAND_LINE_SIZE - 1))
 		die("Command line overflow\n");
 	strcat(cmdline, str);
-#if DEBUG
-	fprintf(stderr, "Command line after adding elfcorehdr: %s\n", cmdline);
-#endif
+	dbgprintf("Command line after adding elfcorehdr: %s\n", cmdline);
 	return 0;
 }
 
@@ -393,7 +400,7 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	info->backup_src_start = BACKUP_SRC_START;
 	info->backup_src_size = BACKUP_SRC_SIZE;
 	/* Create a backup region segment to store backup data*/
-	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
+	sz = _ALIGN(BACKUP_SRC_SIZE, align);
 	tmp = xmalloc(sz);
 	memset(tmp, 0, sz);
 	info->backup_start = add_buffer(info, tmp, sz, sz, align,
@@ -465,12 +472,24 @@ void add_usable_mem_rgns(unsigned long long base, unsigned long long size)
 			if (base < ustart && end > uend) {
 				usablemem_rgns.ranges[i].start = base;
 				usablemem_rgns.ranges[i].end = end;
+#ifdef DEBUG
+				fprintf(stderr, "usable memory rgn %u: new base:%llx new size:%llx\n",
+					i, base, size);
+#endif
 				return;
 			} else if (base < ustart) {
 				usablemem_rgns.ranges[i].start = base;
+#ifdef DEBUG
+				fprintf(stderr, "usable memory rgn %u: new base:%llx new size:%llx",
+					i, base, usablemem_rgns.ranges[i].end - base);
+#endif
 				return;
 			} else if (end > uend){
 				usablemem_rgns.ranges[i].end = end;
+#ifdef DEBUG
+				fprintf(stderr, "usable memory rgn %u: new end:%llx, new size:%llx",
+					i, end, end - usablemem_rgns.ranges[i].start);
+#endif
 				return;
 			}
 		}
@@ -478,10 +497,8 @@ void add_usable_mem_rgns(unsigned long long base, unsigned long long size)
 	usablemem_rgns.ranges[usablemem_rgns.size].start = base;
 	usablemem_rgns.ranges[usablemem_rgns.size++].end = end;
 
-#ifdef DEBUG
-	fprintf(stderr, "usable memory rgns size:%u base:%llx size:%llx\n",
+	dbgprintf("usable memory rgns size:%u base:%llx size:%llx\n",
 		usablemem_rgns.size, base, size);
-#endif
 }
 
 int is_crashkernel_mem_reserved(void)

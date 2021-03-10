@@ -28,6 +28,7 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/reboot.h>
 #include <unistd.h>
 #include <fcntl.h>
 #ifndef _O_BINARY
@@ -49,9 +50,10 @@
 
 unsigned long long mem_min = 0;
 unsigned long long mem_max = ULONG_MAX;
-unsigned long kexec_flags = 0;
+static unsigned long kexec_flags = 0;
+int kexec_debug = 0;
 
-void die(char *fmt, ...)
+void die(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -62,7 +64,7 @@ void die(char *fmt, ...)
 	exit(1);
 }
 
-char *xstrdup(const char *str)
+static char *xstrdup(const char *str)
 {
 	char *new = strdup(str);
 	if (!new)
@@ -74,9 +76,9 @@ char *xstrdup(const char *str)
 void *xmalloc(size_t size)
 {
 	void *buf;
-	buf = malloc(size);
 	if (!size)
 		return NULL;
+	buf = malloc(size);
 	if (!buf) {
 		die("Cannot malloc %ld bytes: %s\n",
 			size + 0UL, strerror(errno));
@@ -200,7 +202,7 @@ unsigned long locate_hole(struct kexec_info *info,
 		die("Invalid hole end argument of 0 specified to locate_hole");
 	}
 
-	/* Set an intial invalid value for the hole base */
+	/* Set an initial invalid value for the hole base */
 	hole_base = ULONG_MAX;
 
 	/* Align everything to at least a page size boundary */
@@ -255,8 +257,7 @@ unsigned long locate_hole(struct kexec_info *info,
 		if (start < hole_min) {
 			start = hole_min;
 		}
-		start = (start + hole_align - 1) &
-			~((unsigned long long)hole_align - 1);
+		start = _ALIGN(start, hole_align);
 		if (end > mem_max) {
 			end = mem_max;
 		}
@@ -274,8 +275,8 @@ unsigned long locate_hole(struct kexec_info *info,
 				hole_base = start;
 				break;
 			} else {
-				hole_base = (end - hole_size) &
-					~((unsigned long long)hole_align - 1);
+				hole_base = _ALIGN_DOWN(end - hole_size,
+					hole_align);
 			}
 		}
 	}
@@ -311,7 +312,7 @@ void add_segment_phys_virt(struct kexec_info *info,
 
 	/* Round memsz up to a multiple of pagesize */
 	pagesize = getpagesize();
-	memsz = (memsz + (pagesize - 1)) & ~(pagesize - 1);
+	memsz = _ALIGN(memsz, pagesize);
 
 	/* Verify base is pagesize aligned.
 	 * Finding a way to cope with this problem
@@ -320,7 +321,7 @@ void add_segment_phys_virt(struct kexec_info *info,
 	 * thing.
 	 */
 	if (base & (pagesize -1)) {
-		die("Base address: %x is not page aligned\n", base);
+		die("Base address: %lx is not page aligned\n", base);
 	}
 
 	if (phys)
@@ -361,7 +362,7 @@ unsigned long add_buffer_phys_virt(struct kexec_info *info,
 
 	/* Round memsz up to a multiple of pagesize */
 	pagesize = getpagesize();
-	memsz = (memsz + (pagesize - 1)) & ~(pagesize - 1);
+	memsz = _ALIGN(memsz, pagesize);
 
 	base = locate_hole(info, memsz, buf_align, buf_min, buf_max, buf_end);
 	if (base == ULONG_MAX) {
@@ -455,8 +456,8 @@ int add_backup_segments(struct kexec_info *info, unsigned long backup_base,
 				return -1;
 			if (!find_segment_hole(info, &bkseg_base, &bkseg_size))
 				break;
-			start = (bkseg_base + pagesize - 1) & ~(pagesize - 1);
-			end = (bkseg_base + bkseg_size) & ~(pagesize - 1);
+			start = _ALIGN(bkseg_base, pagesize);
+			end = _ALIGN_DOWN(bkseg_base + bkseg_size, pagesize);
 			add_segment_phys_virt(info, NULL, 0,
 					      start, end-start, 0);
 			mem_size = mem_base + mem_size - \
@@ -667,13 +668,12 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	kernel = argv[fileind];
 	/* slurp in the input kernel */
 	kernel_buf = slurp_decompress_file(kernel, &kernel_size);
-#if 0
-	fprintf(stderr, "kernel: %p kernel_size: %lx\n", 
-		kernel_buf, kernel_size);
-#endif
+
+	dbgprintf("kernel: %p kernel_size: %lx\n",
+		  kernel_buf, kernel_size);
 
 	if (get_memory_ranges(&info.memory_range, &info.memory_ranges,
-		info.kexec_flags) < 0) {
+		info.kexec_flags) < 0 || info.memory_ranges == 0) {
 		fprintf(stderr, "Could not get memory layout\n");
 		return -1;
 	}
@@ -717,10 +717,20 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	}
 	info.kexec_flags |= native_arch;
 
-	if (file_type[i].load(argc, argv, kernel_buf,
-			      kernel_size, &info) < 0) {
-		fprintf(stderr, "Cannot load %s\n", kernel);
-		return -1;
+	result = file_type[i].load(argc, argv, kernel_buf, kernel_size, &info);
+	if (result < 0) {
+		switch (result) {
+		case ENOCRASHKERNEL:
+			fprintf(stderr,
+				"No crash kernel segment found in /proc/iomem\n"
+				"Please check the crashkernel= boot parameter.\n");
+			break;
+		case EFAILED:
+		default:
+			fprintf(stderr, "Cannot load %s\n", kernel);
+			break;
+		}
+		return result;
 	}
 	/* If we are not in native mode setup an appropriate trampoline */
 	if (arch_compat_trampoline(&info) < 0) {
@@ -747,11 +757,12 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	update_purgatory(&info);
 	if (entry)
 		info.entry = entry;
-#if 0
-	fprintf(stderr, "kexec_load: entry = %p flags = %lx\n", 
-		info.entry, info.kexec_flags);
-	print_segments(stderr, &info);
-#endif
+
+	dbgprintf("kexec_load: entry = %p flags = %lx\n",
+		  info.entry, info.kexec_flags);
+	if (kexec_debug)
+		print_segments(stderr, &info);
+
 	result = kexec_load(
 		info.entry, info.nr_segments, info.segment, info.kexec_flags);
 	if (result != 0) {
@@ -765,7 +776,7 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	return result;
 }
 
-int k_unload (unsigned long kexec_flags)
+static int k_unload (unsigned long kexec_flags)
 {
 	int result;
 	long native_arch;
@@ -811,7 +822,7 @@ static int my_shutdown(void)
  */
 static int my_exec(void)
 {
-	kexec_reboot();
+	reboot(LINUX_REBOOT_CMD_KEXEC);
 	/* I have failed if I make it here */
 	fprintf(stderr, "kexec failed: %s\n", 
 		strerror(errno));
@@ -893,6 +904,7 @@ void usage(void)
 	       "                      context of current kernel during kexec.\n"
 	       "     --load-jump-back-helper Load a helper image to jump back\n"
 	       "                      to original kernel.\n"
+	       " -d, --debug           Enable debugging to help spot a failure.\n"
 	       "\n"
 	       "Supported kernel file types and options: \n");
 	for (i = 0; i < file_types; i++) {
@@ -1006,7 +1018,7 @@ char *get_command_line(void)
 }
 
 /* check we retained the initrd */
-void check_reuse_initrd(void)
+static void check_reuse_initrd(void)
 {
 	char *line = get_command_line();
 
@@ -1066,6 +1078,8 @@ int main(int argc, char *argv[])
 		case OPT_VERSION:
 			version();
 			return 0;
+		case OPT_DEBUG:
+			kexec_debug = 1;
 		case OPT_NOIFDOWN:
 			do_ifdown = 0;
 			break;

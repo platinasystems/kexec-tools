@@ -4,7 +4,7 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.3)
+AC_INIT(kexec-tools, 2.0.4)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
@@ -107,6 +107,7 @@ AC_CHECK_TOOL([LD], ld, "no", $PATH)
 AC_CHECK_TOOL([AS], as, "no", $PATH)
 AC_CHECK_TOOL([OBJCOPY], objcopy, "no", $PATH)
 AC_CHECK_TOOL([AR], ar, "", $PATH)
+AC_CHECK_TOOL([STRIP], strip, "no", $PATH)
 
 dnl Find compiler for target
 if test "${target}" != "${host}" ; then
@@ -185,6 +186,7 @@ if test "$SED"     = "no"; then AC_MSG_ERROR([ sed not found]); fi
 if test "$FIND"    = "no"; then AC_MSG_ERROR([ find not found]); fi
 if test "$XARGS"   = "no"; then AC_MSG_ERROR([ xargs not found]); fi
 if test "$DIRNAME" = "no"; then AC_MSG_ERROR([ dirname not found]); fi
+if test "$STRIP"   = "no"; then AC_MSG_ERROR([ strip not found]); fi
 
 dnl ---Output variables...
 AC_SUBST([BUILD_CC])

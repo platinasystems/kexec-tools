@@ -19,6 +19,7 @@
  */
 
 #define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -29,9 +30,8 @@
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
-#include "../../kexec.h"
-#include "kexec-ppc64.h"
-#include "crashdump-ppc64.h"
+#include "kexec.h"
+#include "fs2dt.h"
 
 #define MAXPATH 1024		/* max path name length */
 #define NAMESPACE 16384		/* max bytes for property names */
@@ -43,19 +43,30 @@ static char pathname[MAXPATH], *pathstart;
 static char propnames[NAMESPACE] = { 0 };
 static unsigned *dt_base, *dt;
 static unsigned int dt_cur_size;
-static unsigned long long mem_rsrv[2*MEMRESERVE] = { 0, 0 };
+static unsigned long long mem_rsrv[2*MEMRESERVE] = { 0ULL, 0ULL };
 
 static int crash_param = 0;
 static char local_cmdline[COMMAND_LINE_SIZE] = { "" };
-extern mem_rgns_t usablemem_rgns;
-static struct bootblock bb[1];
-extern int my_debug;
+
+extern unsigned char reuse_initrd;
+
+/* Used for enabling printing message from purgatory code
+ * Only has implemented for PPC64 */
+int my_debug;
+
+/* This provides the behaviour of hte existing ppc64 implementation */
+static void pad_structure_block(size_t len) {
+#ifdef NEED_STRUCTURE_BLOCK_EXTRA_PAD
+	if ((len >= 8) && ((unsigned long)dt & 0x4))
+		dt++;
+#endif
+}
 
 /* Before we add something to the dt, reserve N words using this.
  * If there isn't enough room, it's realloced -- and you don't overflow and
- * splat bits of your heap. 
+ * splat bits of your heap.
  */
-void dt_reserve(unsigned **dt_ptr, unsigned words)
+static void dt_reserve(unsigned **dt_ptr, unsigned words)
 {
 	unsigned int sz = INIT_TREE_WORDS;
 
@@ -73,7 +84,7 @@ void dt_reserve(unsigned **dt_ptr, unsigned words)
 		offset = *dt_ptr - dt_base;
 		dt_base = new_dt;
 		dt_cur_size = new_size;
-		*dt_ptr = dt_base + offset;
+		*dt_ptr = cpu_to_be32((unsigned)dt_base + offset);
 		memset(*dt_ptr, 0, (new_size - offset)*4);
 	}
 }
@@ -82,15 +93,15 @@ void reserve(unsigned long long where, unsigned long long length)
 {
 	size_t offset;
 
-	for (offset = 0; mem_rsrv[offset + 1]; offset += 2)
+	for (offset = 0; be64_to_cpu(mem_rsrv[offset + 1]); offset += 2)
 		;
 
 	if (offset + 4 >= 2 * MEMRESERVE)
 		die("unrecoverable error: exhasuted reservation meta data\n");
 
-	mem_rsrv[offset] = where;
-	mem_rsrv[offset + 1] = length;
-	mem_rsrv[offset + 3] = 0;  /* N.B: don't care about offset + 2 */
+	mem_rsrv[offset] = cpu_to_be64(where);
+	mem_rsrv[offset + 1] = cpu_to_be64(length);
+	mem_rsrv[offset + 2] = mem_rsrv[offset + 3] = cpu_to_be64(0);
 }
 
 /* look for properties we need to reserve memory space for */
@@ -149,7 +160,8 @@ static unsigned propnum(const char *name)
 	return offset;
 }
 
-static void add_dyn_reconf_usable_mem_property(int fd)
+#ifdef HAVE_DYNAMIC_MEMORY
+static void add_dyn_reconf_usable_mem_property__(int fd)
 {
 	char fname[MAXPATH], *bname;
 	uint64_t buf[32];
@@ -249,54 +261,60 @@ static void add_dyn_reconf_usable_mem_property(int fd)
 	 * Add linux,drconf-usable-memory property.
 	 */
 	dt_reserve(&dt, 4+((rlen + 3)/4));
-	*dt++ = 3;
-	*dt++ = rlen;
-	*dt++ = propnum("linux,drconf-usable-memory");
-	if ((rlen >= 8) && ((unsigned long)dt & 0x4))
-		dt++;
+	*dt++ = cpu_to_be32(3);
+	*dt++ = cpu_to_be32(rlen);
+	*dt++ = cpu_to_be32(propnum("linux,drconf-usable-memory"));
+	pad_structure_block(rlen);
 	memcpy(dt, ranges, rlen);
 	free(ranges);
-	dt += (rlen + 3)/4;
+	dt += cpu_to_be32((rlen + 3)/4);
 }
+
+static void add_dyn_reconf_usable_mem_property(struct dirent *dp, int fd)
+{
+	if (!strcmp(dp->d_name, "ibm,dynamic-memory") && usablemem_rgns.size)
+		add_dyn_reconf_usable_mem_property__(fd);
+}
+#else
+static void add_dyn_reconf_usable_mem_property(struct dirent *dp, int fd) {}
+#endif
 
 static void add_usable_mem_property(int fd, size_t len)
 {
 	char fname[MAXPATH], *bname;
-	uint64_t buf[2];
-	uint64_t *ranges;
+	uint32_t buf[2];
+	uint32_t *ranges;
 	int ranges_size = MEM_RANGE_CHUNK_SZ;
 	uint64_t base, end, loc_base, loc_end;
 	size_t range;
 	int rlen = 0;
-	ssize_t slen;
 
 	strcpy(fname, pathname);
 	bname = strrchr(fname,'/');
 	bname[0] = '\0';
 	bname = strrchr(fname,'/');
-	if (strncmp(bname, "/memory@", 8))
+	if (strncmp(bname, "/memory@", 8) && strcmp(bname, "/memory"))
 		return;
 
-	if (len < 2 * sizeof(uint64_t))
+	if (len < sizeof(buf))
 		die("unrecoverable error: not enough data for mem property\n");
-	slen = 2 * sizeof(uint64_t);
 
 	if (lseek(fd, 0, SEEK_SET) < 0)
 		die("unrecoverable error: error seeking in \"%s\": %s\n",
 		    pathname, strerror(errno));
-	if (read(fd, buf, slen) != slen)
+	if (read(fd, buf, sizeof(buf)) != sizeof(buf))
 		die("unrecoverable error: error reading \"%s\": %s\n",
 		    pathname, strerror(errno));
 
 	if (~0ULL - buf[0] < buf[1])
 		die("unrecoverable error: mem property overflow\n");
-	base = buf[0];
-	end = base + buf[1];
+	base = be32_to_cpu(buf[0]);
+	end = base + be32_to_cpu(buf[1]);
 
-	ranges = malloc(ranges_size*8);
+	ranges = malloc(ranges_size * sizeof(*ranges));
 	if (!ranges)
 		die("unrecoverable error: can't alloc %d bytes for ranges.\n",
-		    ranges_size*8);
+		    ranges_size * sizeof(*ranges));
 
 	for (range = 0; range < usablemem_rgns.size; range++) {
 		int add = 0;
@@ -314,11 +332,12 @@ static void add_usable_mem_property(int fd, size_t len)
 		if (add) {
 			if (rlen >= (ranges_size-2)) {
 				ranges_size += MEM_RANGE_CHUNK_SZ;
-				ranges = realloc(ranges, ranges_size*8);
+				ranges = realloc(ranges, ranges_size *
+						 sizeof(*ranges));
 				if (!ranges)
 					die("unrecoverable error: can't realloc"
 					    "%d bytes for ranges.\n",
-					    ranges_size*8);
+					    ranges_size*sizeof(*ranges));
 			}
 			ranges[rlen++] = loc_base;
 			ranges[rlen++] = loc_end - loc_base;
@@ -335,16 +354,15 @@ static void add_usable_mem_property(int fd, size_t len)
 		ranges[rlen++] = 0;
 	}
 
-	rlen = rlen * sizeof(uint64_t);
+	rlen = rlen * sizeof(*ranges);
 	/*
 	 * No add linux,usable-memory property.
 	 */
 	dt_reserve(&dt, 4+((rlen + 3)/4));
-	*dt++ = 3;
-	*dt++ = rlen;
-	*dt++ = propnum("linux,usable-memory");
-	if ((rlen >= 8) && ((unsigned long)dt & 0x4))
-		dt++;
+	*dt++ = cpu_to_be32(3);
+	*dt++ = cpu_to_be32(rlen);
+	*dt++ = cpu_to_be32(propnum("linux,usable-memory"));
+	pad_structure_block(rlen);
 	memcpy(dt, ranges, rlen);
 	free(ranges);
 	dt += (rlen + 3)/4;
@@ -364,6 +382,12 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 		strcpy(fn, dp->d_name);
 
 		if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
+                        continue;
+
+		/* Empirically, this seems to need to be ecluded.
+		 * Observed on ARM with 3.6-rc2 kernel
+		 */
+		if (!strcmp(dp->d_name, "name"))
                         continue;
 
 		if (lstat(pathname, &statbuf))
@@ -406,12 +430,10 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 		len = statbuf.st_size;
 
 		dt_reserve(&dt, 4+((len + 3)/4));
-		*dt++ = 3;
-		*dt++ = len;
-		*dt++ = propnum(fn);
-
-		if ((len >= 8) && ((unsigned long)dt & 0x4))
-			dt++;
+		*dt++ = cpu_to_be32(3);
+		*dt++ = cpu_to_be32(len);
+		*dt++ = cpu_to_be32(propnum(fn));
+		pad_structure_block(len);
 
 		fd = open(pathname, O_RDONLY);
 		if (fd == -1)
@@ -429,12 +451,10 @@ static void putprops(char *fn, struct dirent **nlist, int numlist)
 		checkprop(fn, dt, len);
 
 		dt += (len + 3)/4;
+
 		if (!strcmp(dp->d_name, "reg") && usablemem_rgns.size)
 			add_usable_mem_property(fd, len);
-		if (!strcmp(dp->d_name, "ibm,dynamic-memory") &&
-					usablemem_rgns.size)
-			add_dyn_reconf_usable_mem_property(fd);
-
+		add_dyn_reconf_usable_mem_property(dp, fd);
 		close(fd);
 	}
 
@@ -479,16 +499,6 @@ static void putnode(void)
 	struct stat statbuf;
 	int plen;
 
-	plen = *pathstart ? strlen(pathstart) : 1;
-	/* Reserve space for string packed to words; e.g. string length 10 
-	 * occupies 3 words, length 12 occupies 4 (for terminating \0s).  
-	 * So round up & include the \0:
-	 */
-	dt_reserve(&dt, 1+((plen + 4)/4));
-	*dt++ = 1;
-	strcpy((void *)dt, *pathstart ? pathstart : "/");
-	dt += ((plen + 4)/4);
-
 	numlist = scandir(pathname, &namelist, 0, comparefunc);
 	if (numlist < 0)
 		die("unrecoverable error: could not scan \"%s\": %s\n",
@@ -497,37 +507,44 @@ static void putnode(void)
 		die("unrecoverable error: no directory entries in \"%s\"",
 		    pathname);
 
-	basename = strrchr(pathname,'/');
+	basename = strrchr(pathname,'/') + 1;
 
-	strncat(pathname, "/", MAXPATH - strlen(pathname) - 1);
+	plen = *basename ? strlen(basename) : 0;
+	/* Reserve space for string packed to words; e.g. string length 10
+	 * occupies 3 words, length 12 occupies 4 (for terminating \0s).
+	 * So round up & include the \0:
+	 */
+	dt_reserve(&dt, 1+((plen + 4)/4));
+	*dt++ = cpu_to_be32(1);
+	strcpy((void *)dt, *basename ? basename : "");
+	dt += ((plen + 4)/4);
+
+	strcat(pathname, "/");
 	dn = pathname + strlen(pathname);
 
 	putprops(dn, namelist, numlist);
 
 	/* Add initrd entries to the second kernel */
-	if (initrd_base && !strcmp(basename,"/chosen/")) {
+	if (initrd_base && initrd_size && !strcmp(basename,"chosen/")) {
 		int len = 8;
 		unsigned long long initrd_end;
 
 		dt_reserve(&dt, 12); /* both props, of 6 words ea. */
-		*dt++ = 3;
-		*dt++ = len;
-		*dt++ = propnum("linux,initrd-start");
-
-		if ((len >= 8) && ((unsigned long)dt & 0x4))
-			dt++;
+		*dt++ = cpu_to_be32(3);
+		*dt++ = cpu_to_be32(len);
+		*dt++ = cpu_to_be32(propnum("linux,initrd-start"));
+		pad_structure_block(len);
 
 		memcpy(dt,&initrd_base,len);
 		dt += (len + 3)/4;
 
 		len = 8;
-		*dt++ = 3;
-		*dt++ = len;
-		*dt++ = propnum("linux,initrd-end");
+		*dt++ = cpu_to_be32(3);
+		*dt++ = cpu_to_be32(len);
+		*dt++ = cpu_to_be32(propnum("linux,initrd-end"));
 
 		initrd_end = initrd_base + initrd_size;
-		if ((len >= 8) && ((unsigned long)dt & 0x4))
-			dt++;
+		pad_structure_block(len);
 
 		memcpy(dt,&initrd_end,len);
 		dt += (len + 3)/4;
@@ -537,7 +554,7 @@ static void putnode(void)
 
 	/* Add cmdline to the second kernel.  Check to see if the new
 	 * cmdline has a root=.  If not, use the old root= cmdline.  */
-	if (!strcmp(basename,"/chosen/")) {
+	if (!strcmp(basename,"chosen/")) {
 		size_t cmd_len = 0;
 		char *param = NULL;
 		char filename[MAXPATH];
@@ -560,7 +577,7 @@ static void putnode(void)
 			char *old_param;
 
 			strcpy(filename, pathname);
-			strncat(filename, "bootargs", MAXPATH - strlen(filename) - 1);
+			strcat(filename, "bootargs");
 			fp = fopen(filename, "r");
 			if (fp) {
 				if (getline(&last_cmdline, &cmd_len, fp) == -1)
@@ -583,11 +600,10 @@ static void putnode(void)
 
 		/* add new bootargs */
 		dt_reserve(&dt, 4+((cmd_len+3)/4));
-		*dt++ = 3;
-		*dt++ = cmd_len;
-		*dt++ = propnum("bootargs");
-		if ((cmd_len >= 8) && ((unsigned long)dt & 0x4))
-			dt++;
+		*dt++ = cpu_to_be32(3);
+		*dt++ = cpu_to_be32(cmd_len);
+		*dt++ = cpu_to_be32(propnum("bootargs"));
+		pad_structure_block(cmd_len);
 		memcpy(dt, local_cmdline,cmd_len);
 		dt += (cmd_len + 3)/4;
 
@@ -599,14 +615,16 @@ static void putnode(void)
 		 * pseries/hvcterminal is supported.
 		 */
 		strcpy(filename, pathname);
-		strncat(filename, "linux,stdout-path", MAXPATH - strlen(filename) - 1);
+		strncat(filename, "linux,stdout-path", MAXPATH);
 		fd = open(filename, O_RDONLY);
 		if (fd == -1) {
-			printf("Unable to find %s, printing from purgatory is disabled\n", filename);
+			printf("Unable to find %s, printing from purgatory is diabled\n",
+														filename);
 			goto no_debug;
 		}
 		if (fstat(fd, &statbuf)) {
-			printf("Unable to stat %s, printing from purgatory is disabled\n", filename);
+			printf("Unable to stat %s, printing from purgatory is diabled\n",
+														filename);
 			close(fd);
 			goto no_debug;
 
@@ -621,15 +639,17 @@ static void putnode(void)
 		read(fd, buff, statbuf.st_size);
 		close(fd);
 		strncpy(filename, "/proc/device-tree/", MAXPATH);
-		strncat(filename, buff, MAXPATH - strlen(filename) - 1);
-		strncat(filename, "/compatible", MAXPATH - strlen(filename) - 1);
+		strncat(filename, buff, MAXPATH);
+		strncat(filename, "/compatible", MAXPATH);
 		fd = open(filename, O_RDONLY);
 		if (fd == -1) {
-			printf("Unable to find %s printing from purgatory is disabled\n", filename);
+			printf("Unable to find %s printing from purgatory is diabled\n",
+														filename);
 			goto no_debug;
 		}
 		if (fstat(fd, &statbuf)) {
-			printf("Unable to stat %s printing from purgatory is disabled\n", filename);
+			printf("Unable to stat %s printing from purgatory is diabled\n",
+														filename);
 			close(fd);
 			goto no_debug;
 		}
@@ -664,20 +684,77 @@ no_debug:
 	}
 
 	dt_reserve(&dt, 1);
-	*dt++ = 2;
+	*dt++ = cpu_to_be32(2);
 	dn[-1] = '\0';
 	free(namelist);
 }
 
-int create_flatten_tree(char **bufp, off_t *sizep, char *cmdline)
+struct bootblock bb[1];
+
+static void add_boot_block(char **bufp, off_t *sizep)
 {
 	unsigned long len;
-	unsigned long tlen;
+	unsigned long tlen, toff;
 	char *buf;
-	unsigned long me;
 
-	me = 0;
+	len = _ALIGN(sizeof(bb[0]), 8);
 
+	bb->off_mem_rsvmap = cpu_to_be32(len);
+
+	for (len = 1; be64_to_cpu(mem_rsrv[len]); len += 2)
+		;
+	len++;
+#ifdef NEED_RESERVE_DTB
+	len+= 3; /* Leave space for totalsize reservation */
+#endif
+	len *= sizeof(mem_rsrv[0]);
+
+	bb->off_dt_struct = cpu_to_be32(be32_to_cpu(bb->off_mem_rsvmap) + len);
+
+	len = dt - dt_base;
+	len *= sizeof(unsigned);
+#if (BOOT_BLOCK_VERSION >= 17)
+	bb->dt_struct_size = cpu_to_be32(len);
+#endif
+	bb->off_dt_strings = cpu_to_be32(be32_to_cpu(bb->off_dt_struct) + len);
+
+	len = propnum("");
+	bb->dt_strings_size = cpu_to_be32(len);
+	len = _ALIGN(len, 4);
+	bb->totalsize = cpu_to_be32(be32_to_cpu(bb->off_dt_strings) + len);
+
+	bb->magic = cpu_to_be32(0xd00dfeed);
+	bb->version = cpu_to_be32(BOOT_BLOCK_VERSION);
+	bb->last_comp_version = cpu_to_be32(BOOT_BLOCK_LAST_COMP_VERSION);
+
+#ifdef NEED_RESERVE_DTB
+	reserve(0, be32_to_cpu(bb->totalsize)); /* patched later in kexec_load */
+#endif
+
+	buf = malloc(be32_to_cpu(bb->totalsize));
+	*bufp = buf;
+
+	tlen = be32_to_cpu(bb->off_mem_rsvmap);
+	memcpy(buf, bb, tlen);
+
+	toff = be32_to_cpu(bb->off_mem_rsvmap);
+	tlen = be32_to_cpu(bb->off_dt_struct) - be32_to_cpu(bb->off_mem_rsvmap);
+	memcpy(buf + toff, mem_rsrv, tlen);
+
+	toff += be32_to_cpu(bb->off_dt_struct) - be32_to_cpu(bb->off_mem_rsvmap);
+	tlen = be32_to_cpu(bb->off_dt_strings) - be32_to_cpu(bb->off_dt_struct);
+	memcpy(buf + toff, dt_base,  tlen);
+
+	toff += be32_to_cpu(bb->off_dt_strings) - be32_to_cpu(bb->off_dt_struct);
+	tlen = be32_to_cpu(bb->totalsize) - be32_to_cpu(bb->off_dt_strings);
+	memcpy(buf + toff, propnames,  tlen);
+
+	*sizep = toff + be32_to_cpu(bb->totalsize) -
+		be32_to_cpu(bb->off_dt_strings);
+}
+
+void create_flatten_tree(char **bufp, off_t *sizep, const char *cmdline)
+{
 	strcpy(pathname, "/proc/device-tree/");
 
 	pathstart = pathname + strlen(pathname);
@@ -696,43 +773,8 @@ int create_flatten_tree(char **bufp, off_t *sizep, char *cmdline)
 
 	putnode();
 	dt_reserve(&dt, 1);
-	*dt++ = 9;
+	*dt++ = cpu_to_be32(9);
 
-	len = _ALIGN(sizeof(bb[0]), 8);
-
-	bb->off_mem_rsvmap = len;
-
-	for (len = 1; mem_rsrv[len]; len += 2)
-		;
-	len+= 3;
-	len *= sizeof(mem_rsrv[0]);
-
-	bb->off_dt_struct = bb->off_mem_rsvmap + len;
-
-	len = dt - dt_base;
-	len *= sizeof(unsigned);
-	bb->off_dt_strings = bb->off_dt_struct + len;
-
-	len = _ALIGN(propnum(""), 4);
-	bb->totalsize = bb->off_dt_strings + len;
-
-	bb->magic = 0xd00dfeed;
-	bb->version = 2;
-	bb->last_comp_version = 2;
-
-	reserve(me, bb->totalsize); /* patched later in kexec_load */
-
-	buf = malloc(bb->totalsize);
-	*bufp = buf;
-	memcpy(buf, bb, bb->off_mem_rsvmap);
-	tlen = bb->off_mem_rsvmap;
-	memcpy(buf+tlen, mem_rsrv, bb->off_dt_struct - bb->off_mem_rsvmap);
-	tlen = tlen + (bb->off_dt_struct - bb->off_mem_rsvmap);
-	memcpy(buf+tlen, dt_base,  bb->off_dt_strings - bb->off_dt_struct);
-	tlen = tlen +  (bb->off_dt_strings - bb->off_dt_struct);
-	memcpy(buf+tlen, propnames,  bb->totalsize - bb->off_dt_strings);
-	tlen = tlen + bb->totalsize - bb->off_dt_strings;
-	*sizep = tlen;
+	add_boot_block(bufp, sizep);
 	free(dt_base);
-	return 0;
 }
