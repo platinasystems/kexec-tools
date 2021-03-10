@@ -1384,12 +1384,18 @@ case $host_cpu in
 	powerpc )
 		host_cpu="ppc"
 		;;
+	powerpc64 )
+		host_cpu="ppc64"
+		;;
+	s390x )
+		host_cpu="s390"
+		;;
 	* )
 		host_cpu="$host_cpu"
 		;;
 esac
 case $host_cpu in
-	i386|ppc|x86_64|alpha|ppc64|ia64)
+	i386|ppc|x86_64|alpha|ppc64|ia64|s390)
 		;;
 	* )
 		{ { echo "$as_me:$LINENO: error:  unsupported architecture $host_cpu" >&5
@@ -1406,6 +1412,12 @@ if test "${host_alias}" ; then
 fi
 EXTRA_CFLAGS=""
 
+# Check whether ppc64. Add -m64 for building 64-bit binary
+# Add -mcall-aixdesc to generate dot-symbols as in gcc 3.3.3
+if test "$ARCH" = ppc64; then
+  EXTRA_CFLAGS="$EXTRA_CFLAGS -m64 -mcall-aixdesc"
+fi;
+
 # Check whether --with-objdir or --without-objdir was given.
 if test "${with_objdir+set}" = set; then
   withval="$with_objdir"
@@ -1420,7 +1432,6 @@ if test "${with_gamecube+set}" = set; then
   withval="$with_gamecube"
    EXTRA_CFLAGS="$EXTRA_CFLAGS -DCONFIG_GAMECUBE=1"
 fi;
-
 
 # Check whether --with-zlib or --without-zlib was given.
 if test "${with_zlib+set}" = set; then

@@ -38,8 +38,8 @@
 #include "kexec-elf.h"
 #include "kexec-sha256.h"
 
-static unsigned long long mem_min = 0;
-static unsigned long long mem_max = ULONG_MAX;
+unsigned long long mem_min = 0;
+unsigned long long mem_max = ULONG_MAX;
 
 void die(char *fmt, ...)
 {
@@ -96,6 +96,9 @@ int valid_memory_range(unsigned long sstart, unsigned long send)
 			continue;
 		mstart = memory_range[i].start;
 		mend = memory_range[i].end;
+		if (i < memory_ranges - 1 && mend == memory_range[i+1].start)
+			mend = memory_range[i+1].end;
+
 		/* Check to see if we are fully contained */
 		if ((mstart <= sstart) && (mend >= send)) {
 			return 1;
@@ -187,14 +190,14 @@ unsigned long locate_hole(struct kexec_info *info,
 	}
 
 	/* Compute the free memory ranges */
-	max_mem_ranges = memory_ranges + (info->nr_segments -1);
+	max_mem_ranges = memory_ranges + info->nr_segments;
 	mem_range = malloc(max_mem_ranges *sizeof(struct memory_range));
 	mem_ranges = 0;
 		
 	/* Perform a merge on the 2 sorted lists of memory ranges  */
 	for (j = 0, i = 0; i < memory_ranges; i++) {
-		unsigned long sstart, send;
-		unsigned long mstart, mend;
+		unsigned long long sstart, send;
+		unsigned long long mstart, mend;
 		mstart = memory_range[i].start;
 		mend = memory_range[i].end;
 		if (memory_range[i].type != RANGE_RAM)
@@ -232,7 +235,7 @@ unsigned long locate_hole(struct kexec_info *info,
 		if (start < hole_min) {
 			start = hole_min;
 		}
-		start = (start + hole_align - 1) & ~(hole_align - 1);
+		start = (start + hole_align - 1) & ~((unsigned long long)hole_align - 1);
 		if (end > mem_max) {
 			end = mem_max;
 		}
@@ -250,7 +253,7 @@ unsigned long locate_hole(struct kexec_info *info,
 				hole_base = start;
 				break;
 			} else {
-				hole_base = (end - hole_size) & ~(hole_align - 1);
+				hole_base = (end - hole_size) & ~((unsigned long long)hole_align - 1);
 			}
 		}
 	}
@@ -323,11 +326,16 @@ unsigned long add_buffer(struct kexec_info *info,
 {
 	unsigned long base;
 	int result;
+	int pagesize;
 
 	result = sort_segments(info);
 	if (result < 0) {
 		die("sort_segments failed\n");
 	}
+
+	/* Round memsz up to a multiple of pagesize */
+	pagesize = getpagesize();
+	memsz = (memsz + (pagesize - 1)) & ~(pagesize - 1);
 
 	base = locate_hole(info, memsz, buf_align, buf_min, buf_max, buf_end);
 	if (base == ULONG_MAX) {
@@ -507,6 +515,8 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	info.segment = NULL;
 	info.nr_segments = 0;
 	info.entry = NULL;
+	info.backup_start = 0;
+	info.kexec_flags = kexec_flags;
 
 	result = 0;
 	if (argc - fileind <= 0) {
@@ -522,7 +532,8 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 		kernel_buf, kernel_size);
 #endif
 
-	if (get_memory_ranges(&memory_range, &memory_ranges) < 0) {
+	if (get_memory_ranges(&memory_range, &memory_ranges,
+		info.kexec_flags) < 0) {
 		fprintf(stderr, "Could not get memory layout\n");
 		return -1;
 	}
@@ -564,7 +575,7 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 		return -1;
 	}
 	/* If we are not in native mode setup an appropriate trampoline */
-	if (arch_compat_trampoline(&info, &kexec_flags) < 0) {
+	if (arch_compat_trampoline(&info) < 0) {
 		return -1;
 	}
 	/* Verify all of the segments load to a valid location in memory */
@@ -585,17 +596,17 @@ static int my_load(const char *type, int fileind, int argc, char **argv,
 	update_purgatory(&info);
 #if 0
 	fprintf(stderr, "kexec_load: entry = %p flags = %lx\n", 
-		info.entry, kexec_flags);
+		info.entry, info.kexec_flags);
 	print_segments(stderr, &info);
 #endif
 	result = kexec_load(
-		info.entry, info.nr_segments, info.segment, kexec_flags);
+		info.entry, info.nr_segments, info.segment, info.kexec_flags);
 	if (result != 0) {
 		/* The load failed, print some debugging information */
 		fprintf(stderr, "kexec_load failed: %s\n", 
 			strerror(errno));
 		fprintf(stderr, "entry       = %p flags = %lx\n", 
-			info.entry, kexec_flags);
+			info.entry, info.kexec_flags);
 		print_segments(stderr, &info);
 	}
 	return result;
@@ -685,6 +696,19 @@ void usage(void)
 	printf(	"Architecture options: \n");
 	arch_usage();
 	printf("\n");
+}
+
+int sys_kexec_loaded()
+{
+	int ret;
+	FILE *fp;
+
+	fp = fopen("/sys/kernel/kexec_loaded", "r");
+	if (fp == NULL)
+		return -1;
+	fscanf(fp, "%d", &ret);
+	fclose(fp);
+	return ret;
 }
 
 int main(int argc, char *argv[])
@@ -796,9 +820,15 @@ int main(int argc, char *argv[])
 	if ((result == 0) && do_sync) {
 		sync();
 	}
-	if ((result == 0) && do_ifdown) {
+        if ((result == 0) && do_ifdown) {
+		int ret;
 		extern int ifdown(void);
-		(void)ifdown();
+		ret = sys_kexec_loaded();
+		if (!ret) {
+			fprintf(stderr,"kexec image is not loaded\n");
+			result = 1;
+		} else
+			(void)ifdown();
 	}
 	if ((result == 0) && do_exec) {
 		result = my_exec();
