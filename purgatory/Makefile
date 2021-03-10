@@ -12,6 +12,7 @@ PURGATORY_SRCS =
 PURGATORY_SRCS += purgatory/purgatory.c
 PURGATORY_SRCS += purgatory/printf.c
 PURGATORY_SRCS += purgatory/string.c
+PURGATORY_MAP = purgatory/purgatory.map
 
 dist += purgatory/Makefile $(PURGATORY_SRCS)				\
 	purgatory/include/purgatory.h purgatory/include/string.h
@@ -47,7 +48,9 @@ purgatory/sha256.o: $(srcdir)/util_lib/sha256.c
 $(PURGATORY): CC=$(TARGET_CC)
 $(PURGATORY): CFLAGS+=$(PURGATORY_EXTRA_CFLAGS) \
 		      $($(ARCH)_PURGATORY_EXTRA_CFLAGS) \
-		      -Os -fno-builtin -ffreestanding
+		      -Os -fno-builtin -ffreestanding \
+		      -fno-zero-initialized-in-bss \
+		      -fno-PIC -fno-PIE -fno-stack-protector
 
 $(PURGATORY): CPPFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS) \
 			-I$(srcdir)/purgatory/include \
@@ -58,14 +61,14 @@ $(PURGATORY): CPPFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS) \
 			-I$(shell $(CC) -print-file-name=include)
 $(PURGATORY): LDFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS)\
 			-Wl,--no-undefined -nostartfiles -nostdlib \
-			-nodefaultlibs -e purgatory_start -r
+			-nodefaultlibs -e purgatory_start -r \
+			-Wl,-Map=$(PURGATORY_MAP)
 
 $(PURGATORY): $(PURGATORY_OBJS)
 	$(MKDIR) -p $(@D)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
-
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@.sym $^
 #	$(LD) $(LDFLAGS) $(EXTRA_LDFLAGS) --no-undefined -e purgatory_start -r -o $@ $(PURGATORY_OBJS) $(UTIL_LIB)
-	$(STRIP) --strip-debug $@
+	$(STRIP) --strip-debug -o $@ $@.sym
 
 echo::
 	@echo "PURGATORY_SRCS $(PURGATORY_SRCS)"
