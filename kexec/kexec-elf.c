@@ -8,6 +8,7 @@
 #include <boot/elf_boot.h>
 #include "kexec.h"
 #include "kexec-elf.h"
+#include "crashdump.h"
 
 static const int probe_debug = 0;
 
@@ -389,8 +390,11 @@ static int build_mem_phdrs(const char *buf, off_t len, struct mem_ehdr *ehdr,
 	phdr_size *= ehdr->e_phnum;
 	if ((uintmax_t)(ehdr->e_phoff + phdr_size) > (uintmax_t)len) {
 		/* The program header did not fit in the file buffer */
-		if (probe_debug) {
-			fprintf(stderr, "ELF program segment truncated\n");
+		if (probe_debug || (flags & ELF_SKIP_FILESZ_CHECK)) {
+			fprintf(stderr, "ELF program headers truncated"
+				" have %ju bytes need %ju bytes\n",
+				(uintmax_t)len,
+				(uintmax_t)(ehdr->e_phoff + phdr_size));
 		}
 		return -1;
 	}
@@ -503,7 +507,7 @@ static int build_mem_elf32_shdr(const char *buf, struct mem_ehdr *ehdr, int idx)
 		break;
 	}
 	if (!size_ok) {
-		fprintf(stderr, "Bad section header(%x) entsize: %ld\n",
+		fprintf(stderr, "Bad section header(%x) entsize: %lld\n",
 			shdr->sh_type, shdr->sh_entsize);
 		return -1;
 	}
@@ -572,7 +576,7 @@ static int build_mem_elf64_shdr(const char *buf, struct mem_ehdr *ehdr, int idx)
 		break;
 	}
 	if (!size_ok) {
-		fprintf(stderr, "Bad section header(%x) entsize: %ld\n",
+		fprintf(stderr, "Bad section header(%x) entsize: %lld\n",
 			shdr->sh_type, shdr->sh_entsize);
 		return -1;
 	}

@@ -40,8 +40,6 @@ static struct crash_elf_info elf_info64 =
 	class: ELFCLASS64,
 	data: ELFDATA2MSB,
 	machine: EM_PPC64,
-	backup_src_start: BACKUP_SRC_START,
-	backup_src_end: BACKUP_SRC_END,
 	page_offset: PAGE_OFFSET,
 	lowmem_limit: MAXMEM,
 };
@@ -51,8 +49,6 @@ static struct crash_elf_info elf_info32 =
 	class: ELFCLASS32,
 	data: ELFDATA2MSB,
 	machine: EM_PPC64,
-	backup_src_start: BACKUP_SRC_START,
-	backup_src_end: BACKUP_SRC_END,
 	page_offset: PAGE_OFFSET,
 	lowmem_limit: MAXMEM,
 };
@@ -394,6 +390,8 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	if (get_crash_memory_ranges(&mem_range, &nr_ranges) < 0)
 		return -1;
 
+	info->backup_src_start = BACKUP_SRC_START;
+	info->backup_src_size = BACKUP_SRC_SIZE;
 	/* Create a backup region segment to store backup data*/
 	sz = (BACKUP_SRC_SIZE + align - 1) & ~(align - 1);
 	tmp = xmalloc(sz);

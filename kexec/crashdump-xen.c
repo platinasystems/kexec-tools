@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <setjmp.h>
+#include <signal.h>
 #include "kexec.h"
 #include "crashdump.h"
 #include "kexec-syscall.h"
@@ -25,33 +27,131 @@ struct crash_note_info {
 	unsigned long length;
 };
 
-int xen_phys_cpus = 0;
-struct crash_note_info *xen_phys_notes;
+static int xen_phys_cpus;
+static struct crash_note_info *xen_phys_notes;
 
+/* based on code from xen-detect.c */
+static int is_dom0;
+#if defined(__i386__) || defined(__x86_64__)
+static jmp_buf xen_sigill_jmp;
+void xen_sigill_handler(int sig)
+{
+	longjmp(xen_sigill_jmp, 1);
+}
+
+static void xen_cpuid(uint32_t idx, uint32_t *regs, int pv_context)
+{
+	asm volatile (
+#ifdef __i386__
+#define R(x) "%%e"#x"x"
+#else
+#define R(x) "%%r"#x"x"
+#endif
+	"push "R(a)"; push "R(b)"; push "R(c)"; push "R(d)"\n\t"
+	"test %1,%1 ; jz 1f ; ud2a ; .ascii \"xen\" ; 1: cpuid\n\t"
+	"mov %%eax,(%2); mov %%ebx,4(%2)\n\t"
+	"mov %%ecx,8(%2); mov %%edx,12(%2)\n\t"
+	"pop "R(d)"; pop "R(c)"; pop "R(b)"; pop "R(a)"\n\t"
+	: : "a" (idx), "c" (pv_context), "S" (regs) : "memory" );
+}
+
+static int check_for_xen(int pv_context)
+{
+	uint32_t regs[4];
+	char signature[13];
+	uint32_t base;
+
+	for (base = 0x40000000; base < 0x40010000; base += 0x100)
+	{
+		xen_cpuid(base, regs, pv_context);
+
+		*(uint32_t *)(signature + 0) = regs[1];
+		*(uint32_t *)(signature + 4) = regs[2];
+		*(uint32_t *)(signature + 8) = regs[3];
+		signature[12] = '\0';
+
+		if (strcmp("XenVMMXenVMM", signature) == 0 && regs[0] >= (base + 2))
+			goto found;
+	}
+
+	return 0;
+
+found:
+	xen_cpuid(base + 1, regs, pv_context);
+	return regs[0];
+}
+
+static int xen_detect_pv_guest(void)
+{
+	struct sigaction act, oldact;
+	int is_pv = -1;
+
+	if (setjmp(xen_sigill_jmp))
+		return is_pv;
+
+	memset(&act, 0, sizeof(act));
+	act.sa_handler = xen_sigill_handler;
+	sigemptyset (&act.sa_mask);
+	if (sigaction(SIGILL, &act, &oldact))
+		return is_pv;
+	if (check_for_xen(1))
+		is_pv = 1;
+	sigaction(SIGILL, &oldact, NULL);
+	return is_pv;
+}
+#else
+static int xen_detect_pv_guest(void)
+{
+	return 1;
+}
+#endif
+
+/*
+ * Return 1 if its a PV guest.
+ * This includes dom0, which is the only PV guest where kexec/kdump works.
+ * HVM guests have to be handled as native hardware.
+ */
 int xen_present(void)
 {
-	struct stat buf;
-
-	return stat("/proc/xen", &buf) == 0;
+	if (!is_dom0) {
+		if (access("/proc/xen", F_OK) == 0)
+			is_dom0 = xen_detect_pv_guest();
+		else
+			is_dom0 = -1;
+	}
+	return is_dom0 > 0;
 }
 
 unsigned long xen_architecture(struct crash_elf_info *elf_info)
 {
 	unsigned long machine = elf_info->machine;
 #ifdef HAVE_LIBXENCTRL
-	int xc, rc;
+	int rc;
 	xen_capabilities_info_t capabilities;
+#ifdef XENCTRL_HAS_XC_INTERFACE
+	xc_interface *xc;
+#else
+	int xc;
+#endif
 
 	if (!xen_present())
 		goto out;
 
 	memset(capabilities, '0', XEN_CAPABILITIES_INFO_LEN);
 
+#ifdef XENCTRL_HAS_XC_INTERFACE
+	xc = xc_interface_open(NULL, NULL, 0);
+	if ( !xc ) {
+		fprintf(stderr, "failed to open xen control interface.\n");
+		goto out;
+	}
+#else
 	xc = xc_interface_open();
 	if ( xc == -1 ) {
 		fprintf(stderr, "failed to open xen control interface.\n");
 		goto out;
 	}
+#endif
 
 	rc = xc_version(xc, XENVER_capabilities, &capabilities[0]);
 	if ( rc == -1 ) {

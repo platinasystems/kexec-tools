@@ -16,6 +16,7 @@ int machine_verify_elf_rel(struct mem_ehdr *ehdr)
 	if (ehdr->e_machine != EM_PPC64) {
 		return 0;
 	}
+
 	return 1;
 }
 
@@ -23,13 +24,16 @@ static struct mem_shdr *toc_section(const struct mem_ehdr *ehdr)
 {
 	struct mem_shdr *shdr, *shdr_end;
 	unsigned char *strtab;
+
 	strtab = (unsigned char *)ehdr->e_shdr[ehdr->e_shstrndx].sh_data;
 	shdr_end = &ehdr->e_shdr[ehdr->e_shnum];
-	for(shdr = ehdr->e_shdr; shdr != shdr_end; shdr++)
-		if ( shdr->sh_size &&
-			strcmp((char *)&strtab[shdr->sh_name],
-						".toc") == 0)
+	for (shdr = ehdr->e_shdr; shdr != shdr_end; shdr++) {
+		if (shdr->sh_size &&
+			strcmp((char *)&strtab[shdr->sh_name], ".toc") == 0) {
 			return shdr;
+		}
+	}
+
 	return NULL;
 }
 
@@ -39,13 +43,28 @@ static struct mem_shdr *toc_section(const struct mem_ehdr *ehdr)
 unsigned long my_r2(const struct mem_ehdr *ehdr)
 {
 	struct mem_shdr *shdr;
+
 	shdr = toc_section(ehdr);
 	if (!shdr) {
 		die("TOC reloc without a toc section?");
 	}
+
 	return shdr->sh_addr + 0x8000;
 }
 
+static void do_relative_toc(unsigned long value, uint16_t *location,
+	unsigned long mask, int complain_signed)
+{
+	if (complain_signed && (value + 0x8000 > 0xffff)) {
+		die("TOC16 relocation overflows (%lu)\n", value);
+	}
+
+	if ((~mask & 0xffff) & value) {
+		die("bad TOC16 relocation (%lu)\n", value);
+	}
+
+	*location = (*location & ~mask) | (value & mask);
+}
 
 void machine_apply_elf_rel(struct mem_ehdr *ehdr, unsigned long r_type,
 	void *location, unsigned long address, unsigned long value)
@@ -70,28 +89,42 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, unsigned long r_type,
 		*(uint64_t *)location = my_r2(ehdr);
 		break;
 
+	case R_PPC64_TOC16:
+		do_relative_toc(value - my_r2(ehdr), location, 0xffff, 1);
+		break;
+
 	case R_PPC64_TOC16_DS:
-		/* Subtact TOC pointer */
-		value -= my_r2(ehdr);
-		if ((value & 3) != 0 || value + 0x8000 > 0xffff) {
-			die("bad TOC16_DS relocation (%lu)\n", value);
-		}
-		*((uint16_t *) location)
-			= (*((uint16_t *) location) & ~0xfffc)
-			| (value & 0xfffc);
+		do_relative_toc(value - my_r2(ehdr), location, 0xfffc, 1);
+		break;
+
+	case R_PPC64_TOC16_LO:
+		do_relative_toc(value - my_r2(ehdr), location, 0xffff, 0);
+		break;
+
+	case R_PPC64_TOC16_LO_DS:
+		do_relative_toc(value - my_r2(ehdr), location, 0xfffc, 0);
+		break;
+
+	case R_PPC64_TOC16_HI:
+		do_relative_toc((value - my_r2(ehdr)) >> 16, location,
+			0xffff, 0);
+		break;
+
+	case R_PPC64_TOC16_HA:
+		do_relative_toc((value - my_r2(ehdr) + 0x8000) >> 16, location,
+			0xffff, 0);
 		break;
 
 	case R_PPC64_REL24:
 		/* Convert value to relative */
 		value -= address;
-		if (value + 0x2000000 > 0x3ffffff || (value & 3) != 0){
-			die("REL24 %li out of range!\n",
-				(long int)value);
+		if (value + 0x2000000 > 0x3ffffff || (value & 3) != 0) {
+			die("REL24 %li out of range!\n", (long int)value);
 		}
 
 		/* Only replace bits 2 through 26 */
-		*(uint32_t *)location = (*(uint32_t *)location & ~0x03fffffc)
-					| (value & 0x03fffffc);
+		*(uint32_t *)location = (*(uint32_t *)location & ~0x03fffffc) |
+					(value & 0x03fffffc);
 		break;
 
 	case R_PPC64_ADDR16_LO:
@@ -99,23 +132,23 @@ void machine_apply_elf_rel(struct mem_ehdr *ehdr, unsigned long r_type,
 		break;
 
 	case R_PPC64_ADDR16_HI:
-		*(uint16_t *)location = (value>>16) & 0xffff;
+		*(uint16_t *)location = (value >> 16) & 0xffff;
 		break;
 
 	case R_PPC64_ADDR16_HA:
-		*(uint16_t *)location = (((value+0x8000)>>16)  & 0xffff);
+		*(uint16_t *)location = (((value + 0x8000) >> 16) & 0xffff);
+		break;
+
+	case R_PPC64_ADDR16_HIGHER:
+		*(uint16_t *)location = (((uint64_t)value >> 32) & 0xffff);
 		break;
 
 	case R_PPC64_ADDR16_HIGHEST:
-		*(uint16_t *)location = (((uint64_t)value>>48)  & 0xffff);
-		break;
-	case R_PPC64_ADDR16_HIGHER:
-		*(uint16_t *)location = (((uint64_t)value>>32)  & 0xffff);
+		*(uint16_t *)location = (((uint64_t)value >> 48) & 0xffff);
 		break;
 
 	default:
 		die("Unknown rela relocation: %lu\n", r_type);
 		break;
 	}
-	return;
 }

@@ -1,7 +1,7 @@
 /*
  * kexec: Linux boots Linux
  *
- * Copyright (C) 2003-2005  Eric Biederman (ebiederm@xmission.com)
+ * Copyright (C) 2003-2010  Eric Biederman (ebiederm@xmission.com)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,32 +43,32 @@ static const int probe_debug = 0;
 
 int bzImage_probe(const char *buf, off_t len)
 {
-	struct x86_linux_header header;
+	const struct x86_linux_header *header;
 	if ((uintmax_t)len < (uintmax_t)sizeof(header)) {
 		return -1;
 	}
-	memcpy(&header, buf, sizeof(header));
-	if (memcmp(header.header_magic, "HdrS", 4) != 0) {
+	header = (const struct x86_linux_header *)buf;
+	if (memcmp(header->header_magic, "HdrS", 4) != 0) {
 		if (probe_debug) {
 			fprintf(stderr, "Not a bzImage\n");
 		}
 		return -1;
 	}
-	if (header.boot_sector_magic != 0xAA55) {
+	if (header->boot_sector_magic != 0xAA55) {
 		if (probe_debug) {
 			fprintf(stderr, "No x86 boot sector present\n");
 		}
 		/* No x86 boot sector present */
 		return -1;
 	}
-	if (header.protocol_version < 0x0200) {
+	if (header->protocol_version < 0x0200) {
 		if (probe_debug) {
 			fprintf(stderr, "Must be at least protocol version 2.00\n");
 		}
 		/* Must be at least protocol version 2.00 */
 		return -1;
 	}
-	if ((header.loadflags & 1) == 0) {
+	if ((header->loadflags & 1) == 0) {
 		if (probe_debug) {
 			fprintf(stderr, "zImage not a bzImage\n");
 		}
@@ -217,7 +217,7 @@ int do_bzImage_load(struct kexec_info *info,
 		 * anywhere as we will be just reading command line.
 		 */
 		setup_base = add_buffer(info, real_mode, setup_size, setup_size,
-			16, 0x3000, -1, 1);
+			16, 0x3000, -1, -1);
 	}
 	else if (real_mode->protocol_version >= 0x0200) {
 		/* Careful setup_base must be greater than 8K */

@@ -203,10 +203,6 @@ unsigned long locate_hole(struct kexec_info *info,
 	/* Set an intial invalid value for the hole base */
 	hole_base = ULONG_MAX;
 
-	/* Ensure I have a sane alignment value */
-	if (hole_align == 0) {
-		hole_align = 1;
-	}
 	/* Align everything to at least a page size boundary */
 	if (hole_align < (unsigned long)getpagesize()) {
 		hole_align = getpagesize();
@@ -815,9 +811,7 @@ static int my_shutdown(void)
  */
 static int my_exec(void)
 {
-	int result;
-
-	result = kexec_reboot();
+	kexec_reboot();
 	/* I have failed if I make it here */
 	fprintf(stderr, "kexec failed: %s\n", 
 		strerror(errno));
@@ -1061,8 +1055,6 @@ int main(int argc, char *argv[])
 		{ 0, 0, 0, 0},
 	};
 	static const char short_options[] = KEXEC_ALL_OPT_STR;
-
-	arch_init();
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  options, 0)) != -1) {

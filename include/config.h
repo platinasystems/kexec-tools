@@ -1,6 +1,9 @@
 /* include/config.h.  Generated from config.h.in by configure.  */
 /* include/config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to build for BookE */
+/* #undef CONFIG_BOOKE */
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
@@ -37,17 +40,20 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
+/* Define to 1 if you have the `xc_get_machine_memory_map' function. */
+/* #undef HAVE_XC_GET_MACHINE_MEMORY_MAP */
+
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
 
 /* Define to the release date of this package */
-#define PACKAGE_DATE "29 July 2010"
+#define PACKAGE_DATE "16 January 2012"
 
 /* Define to the full name of this package. */
 #define PACKAGE_NAME "kexec-tools"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kexec-tools 2.0.2"
+#define PACKAGE_STRING "kexec-tools 2.0.3"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kexec-tools"
@@ -56,10 +62,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.2"
-
-/* Define to compile with old toolchains */
-/* #undef PPC_OLDTOOLCHAIN */
+#define PACKAGE_VERSION "2.0.3"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
