@@ -181,6 +181,54 @@ static int get_dyn_reconf_crash_memory_ranges(void)
 	return 0;
 }
 
+/*
+ * For a given memory node, check if it is mapped to system RAM or
+ * to onboard memory on accelerator device like GPU card or such.
+ */
+static int is_coherent_device_mem(const char *fname)
+{
+	char fpath[PATH_LEN];
+	char buf[32];
+	DIR *dmem;
+	FILE *file;
+	struct dirent *mentry;
+	int cnt, ret = 0;
+
+	strcpy(fpath, fname);
+	if ((dmem = opendir(fpath)) == NULL) {
+		perror(fpath);
+		return -1;
+	}
+
+	while ((mentry = readdir(dmem)) != NULL) {
+		if (strcmp(mentry->d_name, "compatible"))
+			continue;
+
+		strcat(fpath, "/compatible");
+		if ((file = fopen(fpath, "r")) == NULL) {
+			perror(fpath);
+			ret = -1;
+			break;
+		}
+		if ((cnt = fread(buf, 1, 32, file)) < 0) {
+			perror(fpath);
+			fclose(file);
+			ret = -1;
+			break;
+		}
+		if (!strncmp(buf, "ibm,coherent-device-memory", 26)) {
+			fclose(file);
+			ret = 1;
+			break;
+		}
+		fclose(file);
+	}
+
+	closedir(dmem);
+	return ret;
+}
+
+
 /* Reads the appropriate file and retrieves the SYSTEM RAM regions for whom to
  * create Elf headers. Keeping it separate from get_memory_ranges() as
  * requirements are different in the case of normal kexec and crashdumps.
@@ -196,12 +244,12 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 {
 
 	char device_tree[256] = "/proc/device-tree/";
-	char fname[256];
+	char fname[PATH_LEN];
 	char buf[MAXBYTES];
 	DIR *dir, *dmem;
 	FILE *file;
 	struct dirent *dentry, *mentry;
-	int n, crash_rng_len = 0;
+	int n, ret, crash_rng_len = 0;
 	unsigned long long start, end;
 	int page_size;
 
@@ -240,6 +288,19 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges)
 			continue;
 		strcpy(fname, device_tree);
 		strcat(fname, dentry->d_name);
+
+		ret = is_coherent_device_mem(fname);
+		if (ret == -1) {
+			closedir(dir);
+			goto err;
+		} else if (ret == 1) {
+			/*
+			 * Avoid adding this memory region as it is not
+			 * mapped to system RAM.
+			 */
+			continue;
+		}
+
 		if ((dmem = opendir(fname)) == NULL) {
 			perror(fname);
 			closedir(dir);
@@ -381,7 +442,7 @@ static void ultoa(uint64_t i, char *str)
 static int add_cmdline_param(char *cmdline, uint64_t addr, char *cmdstr,
 				char *byte)
 {
-	int cmdlen, len, align = 1024;
+	int cmdline_size, cmdlen, len, align = 1024;
 	char str[COMMAND_LINE_SIZE], *ptr;
 
 	/* Passing in =xxxK / =xxxM format. Saves space required in cmdline.*/
@@ -402,7 +463,9 @@ static int add_cmdline_param(char *cmdline, uint64_t addr, char *cmdstr,
 	strcat(str, byte);
 	len = strlen(str);
 	cmdlen = strlen(cmdline) + len;
-	if (cmdlen > (COMMAND_LINE_SIZE - 1))
+	cmdline_size = (kernel_version() < KERNEL_VERSION(3, 15, 0) ?
+			512 : COMMAND_LINE_SIZE);
+	if (cmdlen > (cmdline_size - 1))
 		die("Command line overflow\n");
 	strcat(cmdline, str);
 	dbgprintf("Command line after adding elfcorehdr: %s\n", cmdline);

@@ -24,7 +24,7 @@
 
 #define BOOT_PARAMS_SIZE 1536
 
-off_t initrd_base = 0, initrd_size = 0;
+off_t initrd_base, initrd_size;
 unsigned int kexec_arm_image_size = 0;
 unsigned long long user_page_offset = (-1ULL);
 
@@ -34,6 +34,15 @@ struct zimage_header {
 #define ZIMAGE_MAGIC cpu_to_le32(0x016f2818)
 	uint32_t start;
 	uint32_t end;
+	uint32_t endian;
+
+	/* Extension to the data passed to the boot agent.  The offset
+	 * points at a tagged table following a similar format to the
+	 * ATAGs.
+	 */
+	uint32_t magic2;
+#define ZIMAGE_MAGIC2 (0x45454545)
+	uint32_t extension_tag_offset;
 };
 
 struct android_image {
@@ -113,6 +122,17 @@ struct tag {
 #define tag_next(t)     ((struct tag *)((uint32_t *)(t) + (t)->hdr.size))
 #define byte_size(t)    ((t)->hdr.size << 2)
 #define tag_size(type)  ((sizeof(struct tag_header) + sizeof(struct type) + 3) >> 2)
+
+struct zimage_tag {
+	struct tag_header hdr;
+	union {
+#define ZIMAGE_TAG_KRNL_SIZE cpu_to_le32(0x5a534c4b)
+		struct zimage_krnl_size {
+			uint32_t size_ptr;
+			uint32_t bss_size;
+		} krnl_size;
+	} u;
+};
 
 int zImage_arm_probe(const char *UNUSED(buf), off_t UNUSED(len))
 {
@@ -200,14 +220,12 @@ int create_mem32_tag(struct tag_mem32 *tag_mem32)
 
 static
 int atag_arm_load(struct kexec_info *info, unsigned long base,
-	const char *command_line, off_t command_line_len,
-	const char *initrd, off_t initrd_len, off_t initrd_off)
+	const char *command_line, off_t command_line_len, const char *initrd)
 {
 	struct tag *saved_tags = atag_read_tags();
 	char *buf;
 	off_t len;
 	struct tag *params;
-	uint32_t *initrd_start = NULL;
 	
 	buf = xmalloc(getpagesize());
 	if (!buf) {
@@ -251,8 +269,8 @@ int atag_arm_load(struct kexec_info *info, unsigned long base,
 	if (initrd) {
 		params->hdr.size = tag_size(tag_initrd);
 		params->hdr.tag = ATAG_INITRD2;
-		initrd_start = &params->u.initrd.start;
-		params->u.initrd.size = initrd_len;
+		params->u.initrd.start = initrd_base;
+		params->u.initrd.size = initrd_size;
 		params = tag_next(params);
 	}
 
@@ -271,14 +289,6 @@ int atag_arm_load(struct kexec_info *info, unsigned long base,
 	len = ((char *)params - buf) + sizeof(struct tag_header);
 
 	add_segment(info, buf, len, base, len);
-
-	if (initrd) {
-		*initrd_start = locate_hole(info, initrd_len, getpagesize(),
-				initrd_off, ULONG_MAX, INT_MAX);
-		if (*initrd_start == ULONG_MAX)
-			return -1;
-		add_segment(info, initrd, initrd_len, *initrd_start, initrd_len);
-	}
 
 	return 0;
 }
@@ -348,6 +358,7 @@ static int setup_dtb_prop(char **bufp, off_t *sizep, int parentoffset,
 int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	struct kexec_info *info)
 {
+	unsigned long page_size = getpagesize();
 	unsigned long base, kernel_base;
 	unsigned int atag_offset = 0x1000; /* 4k offset from memory start */
 	unsigned int extra_size = 0x8000; /* TEXT_OFFSET */
@@ -443,7 +454,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	if (dtb_file)
 		dtb_buf = slurp_file(dtb_file, &dtb_length);
 
-	if (len > 0x34) {
+	if (len > sizeof(struct zimage_header)) {
 		const struct zimage_header *hdr;
 		off_t size;
 
@@ -468,6 +479,35 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			}
 			if (size < len)
 				len = size;
+		}
+
+		/* Do we have an extension table? */
+		if (hdr->magic2 == ZIMAGE_MAGIC2 && !kexec_arm_image_size) {
+			uint32_t offset = hdr->extension_tag_offset;
+			uint32_t max = len - sizeof(struct tag_header);
+			struct zimage_tag *tag;
+
+			dbgprintf("zImage has tags\n");
+
+			for (offset = hdr->extension_tag_offset;
+			     (tag = (void *)(buf + offset)) != NULL &&
+			     offset < max && byte_size(tag) &&
+				offset + byte_size(tag) < len;
+			     offset += byte_size(tag)) {
+				dbgprintf("  offset 0x%08x tag 0x%08x size %u\n",
+					  offset, tag->hdr.tag, byte_size(tag));
+				if (tag->hdr.tag == ZIMAGE_TAG_KRNL_SIZE) {
+					uint32_t *p = (void *)buf +
+						tag->u.krnl_size.size_ptr;
+
+					kexec_arm_image_size =
+						get_unaligned(p) +
+						tag->u.krnl_size.bss_size;
+				}
+			}
+
+			dbgprintf("kernel image size: 0x%08x\n",
+				  kexec_arm_image_size);
 		}
 	}
 
@@ -511,6 +551,14 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	 * DTB image always sees an initialised value after _edata.
 	 */
 	kernel_mem_size = len + 4;
+
+	/*
+	 * If the user didn't specify the size of the image, assume the
+	 * maximum kernel compression ratio is 4.  Note that we must
+	 * include space for the compressed image here as well.
+	 */
+	if (!kexec_arm_image_size)
+		kexec_arm_image_size = len * 5;
 
 	/*
 	 * If we are loading a dump capture kernel, we need to update kernel
@@ -562,17 +610,28 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 
 	kernel_base = base + extra_size;
 
-	if (kexec_arm_image_size) {
-		/* If the image size was passed as command line argument,
-		 * use that value for determining the address for initrd,
-		 * atags and dtb images. page-align the given length.*/
-		initrd_base = kernel_base + _ALIGN(kexec_arm_image_size, getpagesize());
-	} else {
-		/* Otherwise, assume the maximum kernel compression ratio
-		 * is 4, and just to be safe, place ramdisk after that.
-		 * Note that we must include space for the compressed
-		 * image here as well. */
-		initrd_base = kernel_base + _ALIGN(len * 5, getpagesize());
+	/*
+	 * Calculate the minimum address of the initrd, which must be
+	 * above the memory used by the zImage while it runs.  This
+	 * needs to be page-size aligned.
+	 */
+	initrd_base = kernel_base + _ALIGN(kexec_arm_image_size, page_size);
+
+	if (ramdisk_buf) {
+		/*
+		 * Find a hole to place the initrd. The crash kernel use
+		 * fixed address, so no check is ok.
+		 */
+		if (!(info->kexec_flags & KEXEC_ON_CRASH)) {
+			initrd_base = locate_hole(info, initrd_size, page_size,
+						  initrd_base,
+						  ULONG_MAX, INT_MAX);
+			if (initrd_base == ULONG_MAX)
+				return -1;
+		}
+
+		add_segment(info, ramdisk_buf, initrd_size, initrd_base,
+			    initrd_size);
 	}
 
 	if (use_atags) {
@@ -581,7 +640,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		 */
 		if (atag_arm_load(info, base + atag_offset,
 		                  command_line, command_line_len,
-		                  ramdisk_buf, initrd_size, initrd_base) == -1)
+		                  ramdisk_buf) == -1)
 			return -1;
 	} else {
 		/*
@@ -611,36 +670,11 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		}
 
 		/*
-		 * Search in memory to make sure there is enough memory
-		 * to hold initrd and dtb.
-		 *
-		 * Even if no initrd is used, this check is still
-		 * required for dtb.
-		 *
-		 * Crash kernel use fixed address, no check is ok.
+		 * Add the initrd parameters to the dtb
 		 */
-		if ((info->kexec_flags & KEXEC_ON_CRASH) == 0) {
-			unsigned long page_size = getpagesize();
-			/*
-			 * DTB size may be increase a little
-			 * when setup initrd size. Add a full page
-			 * for it is enough.
-			 */
-			unsigned long hole_size = _ALIGN_UP(initrd_size, page_size) +
-				_ALIGN(dtb_length + page_size, page_size);
-			unsigned long initrd_base_new = locate_hole(info,
-					hole_size, page_size,
-					initrd_base, ULONG_MAX, INT_MAX);
-			if (initrd_base_new == ULONG_MAX)
-				return -1;
-			initrd_base = initrd_base_new;
-		}
-
 		if (ramdisk_buf) {
-			add_segment(info, ramdisk_buf, initrd_size,
-			            initrd_base, initrd_size);
-
 			unsigned long start, end;
+
 			start = cpu_to_be32((unsigned long)(initrd_base));
 			end = cpu_to_be32((unsigned long)(initrd_base + initrd_size));
 
@@ -654,14 +688,27 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 				return -1;
 		}
 
-		/* Stick the dtb at the end of the initrd and page
-		 * align it.
+		/*
+		 * The dtb must also be placed above the memory used by
+		 * the zImage.  We don't care about its position wrt the
+		 * ramdisk, but we might as well place it after the initrd.
+		 * We leave a buffer page between the initrd and the dtb.
 		 */
-		dtb_offset = initrd_base + initrd_size + getpagesize();
-		dtb_offset = _ALIGN_DOWN(dtb_offset, getpagesize());
+		dtb_offset = initrd_base + initrd_size + page_size;
+		dtb_offset = _ALIGN_DOWN(dtb_offset, page_size);
 
-		add_segment(info, dtb_buf, dtb_length,
-		            dtb_offset, dtb_length);
+		/*
+		 * Find a hole to place the dtb above the initrd.
+		 * Crash kernel use fixed address, no check is ok.
+		 */
+		if (!(info->kexec_flags & KEXEC_ON_CRASH)) {
+			dtb_offset = locate_hole(info, dtb_length, page_size,
+						 dtb_offset, ULONG_MAX, INT_MAX);
+			if (dtb_offset == ULONG_MAX)
+				return -1;
+		}
+
+		add_segment(info, dtb_buf, dtb_length, dtb_offset, dtb_length);
 	}
 
 	add_segment(info, buf, len, kernel_base, kernel_mem_size);
