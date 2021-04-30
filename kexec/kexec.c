@@ -47,6 +47,7 @@
 #include "kexec.h"
 #include "kexec-syscall.h"
 #include "kexec-elf.h"
+#include "kexec-xen.h"
 #include "kexec-sha256.h"
 #include "kexec-zlib.h"
 #include "kexec-lzma.h"
@@ -584,6 +585,7 @@ static char *slurp_file_generic(const char *filename, off_t *r_size,
 		die("Read on %s ended before stat said it should\n", filename);
 
 	*r_size = size;
+	close(fd);
 	return buf;
 }
 
@@ -836,11 +838,21 @@ static int kexec_file_unload(unsigned long kexec_file_flags)
 {
 	int ret = 0;
 
+	if (!is_kexec_file_load_implemented())
+		return EFALLBACK;
+
 	ret = kexec_file_load(-1, -1, 0, NULL, kexec_file_flags);
 	if (ret != 0) {
-		/* The unload failed, print some debugging information */
-		fprintf(stderr, "kexec_file_load(unload) failed\n: %s\n",
-			strerror(errno));
+		if (errno == ENOSYS) {
+			ret = EFALLBACK;
+		} else {
+			/*
+			 * The unload failed, print some debugging
+			 * information */
+			fprintf(stderr, "kexec_file_load(unload) failed: %s\n",
+				strerror(errno));
+			ret = EFAILED;
+		}
 	}
 	return ret;
 }
@@ -895,7 +907,7 @@ static int my_shutdown(void)
 static int my_exec(void)
 {
 	if (xen_present())
-		xen_kexec_exec();
+		xen_kexec_exec(kexec_flags);
 	else
 		reboot(LINUX_REBOOT_CMD_KEXEC);
 	/* I have failed if I make it here */
@@ -1001,6 +1013,8 @@ void usage(void)
 	       "                      If capture kernel is being unloaded\n"
 	       "                      specify -p with -u.\n"
 	       " -e, --exec           Execute a currently loaded kernel.\n"
+               "     --exec-live-update Execute a currently loaded xen image after\n"
+                                      "storing the state required to live update.\n"
 	       " -t, --type=TYPE      Specify the new kernel is of this type.\n"
 	       "     --mem-min=<addr> Specify the lowest memory address to\n"
 	       "                      load code into.\n"
@@ -1012,6 +1026,8 @@ void usage(void)
 	       "                      context of current kernel during kexec.\n"
 	       "     --load-jump-back-helper Load a helper image to jump back\n"
 	       "                      to original kernel.\n"
+	       "     --load-live-update Load the new kernel to overwrite the\n"
+	       "                      running kernel.\n"
 	       "     --entry=<addr>   Specify jump back address.\n"
 	       "                      (0 means it's not jump back or\n"
 	       "                      preserve context)\n"
@@ -1024,7 +1040,8 @@ void usage(void)
 	       "                      syscall is not supported or the kernel did not\n"
 	       "                      understand the image\n"
 	       " -d, --debug          Enable debugging to help spot a failure.\n"
-	       " -S, --status         Return 0 if the type (by default crash) is loaded.\n"
+	       " -S, --status         Return 1 if the type (by default crash) is loaded,\n"
+	       "                      0 if not.\n"
 	       "\n"
 	       "Supported kernel file types and options: \n");
 	for (i = 0; i < file_types; i++) {
@@ -1161,6 +1178,26 @@ char *concat_cmdline(const char *base, const char *append)
 	return cmdline;
 }
 
+void cmdline_add_liveupdate(char **base)
+{
+	uint64_t lu_start, lu_end, lu_sizeM;
+	char *str;
+	char buf[64];
+	size_t len;
+
+	if ( !xen_present() )
+		return;
+
+	xen_get_kexec_range(KEXEC_RANGE_MA_LIVEUPDATE, &lu_start, &lu_end);
+	lu_sizeM = (lu_end - lu_start) / (1024 * 1024) + 1;
+	sprintf(buf, " liveupdate=%lluM@0x%llx", (unsigned long long)lu_sizeM,
+		(unsigned long long)lu_start);
+	len = strlen(*base) + strlen(buf) + 1;
+	str = xmalloc(len);
+	sprintf(str, "%s%s", *base, buf);
+	*base = str;
+}
+
 /* New file based kexec system call related code */
 static int do_kexec_file_load(int fileind, int argc, char **argv,
 			unsigned long flags) {
@@ -1182,15 +1219,13 @@ static int do_kexec_file_load(int fileind, int argc, char **argv,
 	info.file_mode = 1;
 	info.initrd_fd = -1;
 
-	if (!is_kexec_file_load_implemented()) {
-		fprintf(stderr, "syscall kexec_file_load not available.\n");
-		return -ENOSYS;
-	}
+	if (!is_kexec_file_load_implemented())
+		return EFALLBACK;
 
 	if (argc - fileind <= 0) {
 		fprintf(stderr, "No kernel specified\n");
 		usage();
-		return -1;
+		return EFAILED;
 	}
 
 	kernel = argv[fileind];
@@ -1199,7 +1234,7 @@ static int do_kexec_file_load(int fileind, int argc, char **argv,
 	if (kernel_fd == -1) {
 		fprintf(stderr, "Failed to open file %s:%s\n", kernel,
 				strerror(errno));
-		return -1;
+		return EFAILED;
 	}
 
 	/* slurp in the input kernel */
@@ -1225,12 +1260,14 @@ static int do_kexec_file_load(int fileind, int argc, char **argv,
 	if (i == file_types) {
 		fprintf(stderr, "Cannot determine the file type " "of %s\n",
 				kernel);
-		return -1;
+		close(kernel_fd);
+		return EFAILED;
 	}
 
 	ret = file_type[i].load(argc, argv, kernel_buf, kernel_size, &info);
 	if (ret < 0) {
 		fprintf(stderr, "Cannot load %s\n", kernel);
+		close(kernel_fd);
 		return ret;
 	}
 
@@ -1243,9 +1280,43 @@ static int do_kexec_file_load(int fileind, int argc, char **argv,
 
 	ret = kexec_file_load(kernel_fd, info.initrd_fd, info.command_line_len,
 			info.command_line, info.kexec_flags);
-	if (ret != 0)
-		fprintf(stderr, "kexec_file_load failed: %s\n",
-					strerror(errno));
+	if (ret != 0) {
+		switch (errno) {
+			/*
+			 * Something failed with signature verification.
+			 * Reject the image.
+			 */
+		case ELIBBAD:
+		case EKEYREJECTED:
+		case ENOPKG:
+		case ENOKEY:
+		case EBADMSG:
+		case EMSGSIZE:
+			/* Reject by default. */
+		default:
+			ret = EFAILED;
+			break;
+
+			/* Not implemented. */
+		case ENOSYS:
+			/*
+			 * Parsing image or other options failed
+			 * The image may be invalid or image
+			 * type may not supported by kernel so
+			 * retry parsing in kexec-tools.
+			 */
+		case EINVAL:
+		case ENOEXEC:
+			/*
+			 * ENOTSUP can be unsupported image
+			 * type or unsupported PE signature
+			 * wrapper type, duh.
+			 */
+		case ENOTSUP:
+			ret = EFALLBACK;
+			break;
+		}
+	}
 
 	close(kernel_fd);
 	return ret;
@@ -1266,6 +1337,7 @@ static void print_crashkernel_region_size(void)
 
 int main(int argc, char *argv[])
 {
+	int has_opt_load = 0;
 	int do_load = 1;
 	int do_exec = 0;
 	int do_load_jump_back_helper = 0;
@@ -1308,6 +1380,7 @@ int main(int argc, char *argv[])
 			return 0;
 		case OPT_DEBUG:
 			kexec_debug = 1;
+			break;
 		case OPT_NOIFDOWN:
 			skip_ifdown = 1;
 			break;
@@ -1322,6 +1395,7 @@ int main(int argc, char *argv[])
 			do_exec = 1;
 			break;
 		case OPT_LOAD:
+			has_opt_load = 1;
 			do_load = 1;
 			do_exec = 0;
 			do_shutdown = 0;
@@ -1333,6 +1407,13 @@ int main(int argc, char *argv[])
 			do_unload = 1;
 			kexec_file_flags |= KEXEC_FILE_UNLOAD;
 			break;
+                case OPT_EXEC_LIVE_UPDATE:
+			if ( !xen_present() ) {
+				fprintf(stderr, "--exec-live-update only works under xen.\n");
+                                return 1;
+                        }
+			kexec_flags |= KEXEC_LIVE_UPDATE;
+			/* fallthrough */
 		case OPT_EXEC:
 			do_load = 0;
 			do_shutdown = 0;
@@ -1360,11 +1441,13 @@ int main(int argc, char *argv[])
 			}
 			break;
 		case OPT_LOAD_PRESERVE_CONTEXT:
+		case OPT_LOAD_LIVE_UPDATE:
 			do_load = 1;
 			do_exec = 0;
 			do_shutdown = 0;
 			do_sync = 1;
-			kexec_flags = KEXEC_PRESERVE_CONTEXT;
+			kexec_flags = (opt == OPT_LOAD_PRESERVE_CONTEXT) ?
+				       KEXEC_PRESERVE_CONTEXT : KEXEC_LIVE_UPDATE;
 			break;
 		case OPT_TYPE:
 			type = optarg;
@@ -1432,7 +1515,7 @@ int main(int argc, char *argv[])
 		do_sync = 0;
 
 	if (do_status) {
-		if (kexec_flags == 0)
+		if (kexec_flags == 0 && !has_opt_load)
 			kexec_flags = KEXEC_ON_CRASH;
 		do_load = 0;
 		do_reuse_initrd = 0;
@@ -1451,7 +1534,7 @@ int main(int argc, char *argv[])
 	    !is_crashkernel_mem_reserved()) {
 		die("Memory for crashkernel is not reserved\n"
 		    "Please reserve memory by passing"
-		    "\"crashkernel=X@Y\" parameter to kernel\n"
+		    "\"crashkernel=Y@X\" parameter to kernel\n"
 		    "Then try to loading kdump kernel\n");
 	}
 
@@ -1460,6 +1543,11 @@ int main(int argc, char *argv[])
 		die("Please specify memory range used by kexeced kernel\n"
 		    "to preserve the context of original kernel with \n"
 		    "\"--mem-max\" parameter\n");
+	}
+
+	if (do_load && (kexec_flags & KEXEC_LIVE_UPDATE) &&
+	    !xen_present()) {
+		die("--load-live-update can only be used with xen\n");
 	}
 
 	fileind = optind;
@@ -1496,8 +1584,12 @@ int main(int argc, char *argv[])
 	if (do_unload) {
 		if (do_kexec_file_syscall) {
 			result = kexec_file_unload(kexec_file_flags);
-			if ((result == -ENOSYS) && do_kexec_fallback)
+			if (result == EFALLBACK && do_kexec_fallback) {
+				/* Reset getopt for fallback */
+				opterr = 1;
+				optind = 1;
 				do_kexec_file_syscall = 0;
+			}
 		}
 		if (!do_kexec_file_syscall)
 			result = k_unload(kexec_flags);
@@ -1506,45 +1598,11 @@ int main(int argc, char *argv[])
 		if (do_kexec_file_syscall) {
 			result = do_kexec_file_load(fileind, argc, argv,
 						 kexec_file_flags);
-			if (do_kexec_fallback) switch (result) {
-				/*
-				 * Something failed with signature verification.
-				 * Reject the image.
-				 */
-				case -ELIBBAD:
-				case -EKEYREJECTED:
-				case -ENOPKG:
-				case -ENOKEY:
-				case -EBADMSG:
-				case -EMSGSIZE:
-					/*
-					 * By default reject or do nothing if
-					 * succeded
-					 */
-				default: break;
-				case -ENOSYS: /* not implemented */
-					/*
-					 * Parsing image or other options failed
-					 * The image may be invalid or image
-					 * type may not supported by kernel so
-					 * retry parsing in kexec-tools.
-					 */
-				case -EINVAL:
-				case -ENOEXEC:
-					 /*
-					  * ENOTSUP can be unsupported image
-					  * type or unsupported PE signature
-					  * wrapper type, duh
-					  *
-					  * The kernel sometimes wrongly
-					  * returns ENOTSUPP (524) - ignore
-					  * that. It is not supposed to be seen
-					  * by userspace so seeing it is a
-					  * kernel bug
-					  */
-				case -ENOTSUP:
-					do_kexec_file_syscall = 0;
-					break;
+			if (result == EFALLBACK && do_kexec_fallback) {
+				/* Reset getopt for fallback */
+				opterr = 1;
+				optind = 1;
+				do_kexec_file_syscall = 0;
 			}
 		}
 		if (!do_kexec_file_syscall)
@@ -1570,6 +1628,8 @@ int main(int argc, char *argv[])
 	if ((result == 0) && do_load_jump_back_helper) {
 		result = my_load_jump_back_helper(kexec_flags, entry);
 	}
+	if (result == EFALLBACK)
+		fputs("syscall kexec_file_load not available.\n", stderr);
 
 	fflush(stdout);
 	fflush(stderr);

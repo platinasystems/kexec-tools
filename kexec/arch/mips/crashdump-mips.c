@@ -387,8 +387,11 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 				crash_reserved_mem.end, -1);
 
 	if (crash_create(info, elf_info, crash_memory_range, nr_ranges,
-			 &tmp, &sz, ELF_CORE_HEADER_ALIGN) < 0)
+			 &tmp, &sz, ELF_CORE_HEADER_ALIGN) < 0) {
+		free(tmp);
 		return -1;
+	}
+
 	elfcorehdr = add_buffer(info, tmp, sz, sz, align,
 		crash_reserved_mem.start,
 		crash_reserved_mem.end, -1);
@@ -398,7 +401,7 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	 * kernel's available memory
 	 */
 	cmdline_add_mem(mod_cmdline, crash_reserved_mem.start,
-		elfcorehdr - crash_reserved_mem.start);
+		crash_reserved_mem.end - crash_reserved_mem.start + 1);
 	cmdline_add_elfcorehdr(mod_cmdline, elfcorehdr);
 
 	dbgprintf("CRASH MEMORY RANGES:\n");

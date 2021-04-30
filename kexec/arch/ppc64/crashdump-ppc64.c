@@ -478,8 +478,7 @@ static int add_cmdline_param(char *cmdline, uint64_t addr, char *cmdstr,
 	strcat(str, byte);
 	len = strlen(str);
 	cmdlen = strlen(cmdline) + len;
-	cmdline_size = (kernel_version() < KERNEL_VERSION(3, 15, 0) ?
-			512 : COMMAND_LINE_SIZE);
+	cmdline_size = COMMAND_LINE_SIZE;
 	if (cmdlen > (cmdline_size - 1))
 		die("Command line overflow\n");
 	strcat(cmdline, str);
@@ -535,15 +534,19 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 		if (crash_create_elf64_headers(info, &elf_info64,
 					       crash_memory_range, nr_ranges,
 					       &tmp, &sz,
-					       ELF_CORE_HEADER_ALIGN) < 0)
+					       ELF_CORE_HEADER_ALIGN) < 0) {
+			free (tmp);
 			return -1;
+		}
 	}
 	else {
 		if (crash_create_elf32_headers(info, &elf_info32,
 					       crash_memory_range, nr_ranges,
 					       &tmp, &sz,
-					       ELF_CORE_HEADER_ALIGN) < 0)
+					       ELF_CORE_HEADER_ALIGN) < 0) {
+			free(tmp);
 			return -1;
+		}
 	}
 
 	elfcorehdr = add_buffer(info, tmp, sz, sz, align, min_base,
@@ -612,12 +615,12 @@ int get_crash_kernel_load_range(uint64_t *start, uint64_t *end)
 	unsigned long long value;
 
 	if (!get_devtree_value(DEVTREE_CRASHKERNEL_BASE, &value))
-		*start = value;
+		*start = be64_to_cpu(value);
 	else
 		return -1;
 
 	if (!get_devtree_value(DEVTREE_CRASHKERNEL_SIZE, &value))
-		*end = *start + value - 1;
+		*end = *start + be64_to_cpu(value) - 1;
 	else
 		return -1;
 

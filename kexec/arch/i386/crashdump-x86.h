@@ -13,7 +13,8 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 
 #define X86_64__START_KERNEL_map	0xffffffff80000000ULL
 #define X86_64_PAGE_OFFSET_PRE_2_6_27	0xffff810000000000ULL
-#define X86_64_PAGE_OFFSET		0xffff880000000000ULL
+#define X86_64_PAGE_OFFSET_PRE_4_20_0	0xffff880000000000ULL
+#define X86_64_PAGE_OFFSET	0xffff888000000000ULL
 
 #define X86_64_MAXMEM        		0x3fffffffffffUL
 
@@ -21,7 +22,8 @@ int load_crashdump_segments(struct kexec_info *info, char *mod_cmdline,
 #define X86_64_KERNEL_TEXT_SIZE  (512UL*1024*1024)
 
 #define CRASH_MAX_MEMMAP_NR	1024
-#define CRASH_MAX_MEMORY_RANGES	(MAX_MEMORY_RANGES + 2)
+
+#define CRASH_MAX_MEMORY_RANGES	32768
 
 /* Backup Region, First 640K of System RAM. */
 #define BACKUP_SRC_START	0x00000000

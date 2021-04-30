@@ -48,6 +48,12 @@
 #define E820_PRAM         12
 #endif
 
+/*
+ * The real mode IVT ends at 0x400.
+ * See https://wiki.osdev.org/Interrupt_Vector_Table.
+ */
+#define REALMODE_IVT_END 0x400
+
 static struct memory_range memory_range[MAX_MEMORY_RANGES];
 
 /**
@@ -90,7 +96,7 @@ static int get_memory_ranges_proc_iomem(struct memory_range **range, int *ranges
 		if (memcmp(str, "System RAM\n", 11) == 0) {
 			type = RANGE_RAM;
 		}
-		else if (memcmp(str, "reserved\n", 9) == 0) {
+		else if (strncasecmp(str, "reserved\n", 9) == 0) {
 			type = RANGE_RESERVED;
 		}
 		else if (memcmp(str, "ACPI Tables\n", 12) == 0) {
@@ -360,8 +366,8 @@ int get_memory_ranges(struct memory_range **range, int *ranges,
 	/* Don't report the interrupt table as ram */
 	for (i = 0; i < *ranges; i++) {
 		if ((*range)[i].type == RANGE_RAM &&
-				((*range)[i].start < 0x100)) {
-			(*range)[i].start = 0x100;
+				((*range)[i].start < REALMODE_IVT_END)) {
+			(*range)[i].start = REALMODE_IVT_END;
 			break;
 		}
 	}

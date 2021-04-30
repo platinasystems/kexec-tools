@@ -22,7 +22,6 @@ KEXEC_SRCS_base += kexec/firmware_memmap.c
 KEXEC_SRCS_base += kexec/crashdump.c
 KEXEC_SRCS_base += kexec/crashdump-xen.c
 KEXEC_SRCS_base += kexec/phys_arch.c
-KEXEC_SRCS_base += kexec/kernel_version.c
 KEXEC_SRCS_base += kexec/lzma.c
 KEXEC_SRCS_base += kexec/zlib.c
 KEXEC_SRCS_base += kexec/kexec-xen.c
@@ -92,6 +91,7 @@ include $(srcdir)/kexec/arch/ppc64/Makefile
 include $(srcdir)/kexec/arch/s390/Makefile
 include $(srcdir)/kexec/arch/sh/Makefile
 include $(srcdir)/kexec/arch/x86_64/Makefile
+include $(srcdir)/kexec/arch/hppa/Makefile
 
 KEXEC_SRCS += $($(ARCH)_KEXEC_SRCS)
 
