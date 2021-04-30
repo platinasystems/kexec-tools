@@ -1,6 +1,16 @@
+From: Khalid Aziz <khalid@debian.org>
+Date: Fri, 30 Apr 2021 11:17:33 -0700
+Subject: linker-option
+
+---
+ purgatory/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/purgatory/Makefile b/purgatory/Makefile
+index 2dd6c47..3a5bb17 100644
 --- a/purgatory/Makefile
 +++ b/purgatory/Makefile
-@@ -66,7 +66,7 @@ $(PURGATORY): LDFLAGS=$($(ARCH)_PURGATOR
+@@ -66,7 +66,7 @@ $(PURGATORY): LDFLAGS=$($(ARCH)_PURGATORY_EXTRA_CFLAGS)\
  $(PURGATORY): $(PURGATORY_OBJS)
  	$(MKDIR) -p $(@D)
  	$(CC) $(CFLAGS) $(LDFLAGS) -o $@.sym $^

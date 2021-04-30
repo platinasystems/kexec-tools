@@ -1,6 +1,21 @@
+From: Khalid Aziz <khalid@debian.org>
+Date: Fri, 30 Apr 2021 11:17:33 -0700
+Subject: coldreboot
+
+---
+ Makefile.in        |  4 +++-
+ kexec/Makefile     | 12 ++++++++++++
+ kexec/coldreboot   |  6 ++++++
+ kexec/coldreboot.8 | 25 +++++++++++++++++++++++++
+ 4 files changed, 46 insertions(+), 1 deletion(-)
+ create mode 100644 kexec/coldreboot
+ create mode 100644 kexec/coldreboot.8
+
+diff --git a/Makefile.in b/Makefile.in
+index b3bdb6f..0679b9f 100644
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -173,9 +173,11 @@ PSRCS:=$(foreach s, $(SRCS), $(PACKAGE_N
+@@ -183,9 +183,11 @@ PSRCS:=$(foreach s, $(SRCS), $(PACKAGE_NAME)-$(PACKAGE_VERSION)/$(s))
  PGSRCS:=$(foreach s, $(GENERATED_SRCS), $(PACKAGE_NAME)-$(PACKAGE_VERSION)/$(s))
  
  MAN_PAGES:=$(KEXEC_MANPAGE) $(VMCORE_DMESG_MANPAGE)
@@ -12,7 +27,7 @@
  
  UNINSTALL_KDUMP = $(sbindir)/kdump
  UNINSTALL_KDUMP_MANPAGE = $(mandir)/man8/kdump.8
-@@ -184,7 +186,7 @@ UNINSTALL_KEXEC_MANPAGE = $(mandir)/man8
+@@ -195,7 +197,7 @@ UNINSTALL_KEXEC_TEST = $(pkglibdir)/kexec_test
  UNINSTALL_VMCORE_DMESG = $(sbindir)/vmcore-dmesg
  UNINSTALL_VMCORE_DMESG_MANPAGE = $(mandir)/man8/vmcore-dmesg.8
  
@@ -20,10 +35,12 @@
 +TARGETS:=$(BINARIES) $(MAN_PAGES) $(SCRIPTS)
  targets: $(TARGETS)
  
- UNINSTALL_TARGETS:=$(UNINSTALL_KDUMP) $(UNINSTALL_KDUMP_MANPAGE) \
+ UNINSTALL_TARGETS_i386:=$(UNINSTALL_KEXEC_TEST)
+diff --git a/kexec/Makefile b/kexec/Makefile
+index e69e309..79ed081 100644
 --- a/kexec/Makefile
 +++ b/kexec/Makefile
-@@ -103,6 +103,8 @@ clean += $(KEXEC_OBJS) $(KEXEC_DEPS) $(K
+@@ -103,6 +103,8 @@ clean += $(KEXEC_OBJS) $(KEXEC_DEPS) $(KEXEC_GENERATED_SRCS) \
  
  KEXEC = $(SBINDIR)/kexec
  KEXEC_MANPAGE = $(MANDIR)/man8/kexec.8
@@ -32,7 +49,7 @@
  
  -include $(KEXEC_DEPS)
  
-@@ -117,6 +119,16 @@ kexec/fs2dt.o: CPPFLAGS+=$($(ARCH)_FS2DT
+@@ -117,6 +119,16 @@ kexec/fs2dt.o: CPPFLAGS+=$($(ARCH)_FS2DT_INCLUDE)
  $(KEXEC_MANPAGE): kexec/kexec.8
  	@$(MKDIR) -p     $(MANDIR)/man8
  	cp $^ $(KEXEC_MANPAGE)
@@ -49,6 +66,9 @@
  echo::
  	@echo "KEXEC_SRCS $(KEXEC_SRCS)"
  	@echo "KEXEC_DEPS $(KEXEC_DEPS)"
+diff --git a/kexec/coldreboot b/kexec/coldreboot
+new file mode 100644
+index 0000000..842de2a
 --- /dev/null
 +++ b/kexec/coldreboot
 @@ -0,0 +1,6 @@
@@ -58,6 +78,9 @@
 +/bin/rm -f $NOKEXECFILE
 +touch $NOKEXECFILE
 +/sbin/reboot $*
+diff --git a/kexec/coldreboot.8 b/kexec/coldreboot.8
+new file mode 100644
+index 0000000..bf1b991
 --- /dev/null
 +++ b/kexec/coldreboot.8
 @@ -0,0 +1,25 @@

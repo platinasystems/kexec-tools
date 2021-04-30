@@ -1,7 +1,18 @@
-Index: kexec-tools-2.0.3/README.debian
+From: Khalid Aziz <khalid@debian.org>
+Date: Fri, 30 Apr 2021 11:17:32 -0700
+Subject: add_debian_readme
+
 ===================================================================
---- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ kexec-tools-2.0.3/README.debian	2012-01-31 08:51:26.379799691 -0700
+---
+ README.debian | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+ create mode 100644 README.debian
+
+diff --git a/README.debian b/README.debian
+new file mode 100644
+index 0000000..cef3f2f
+--- /dev/null
++++ b/README.debian
 @@ -0,0 +1,11 @@
 +This kexec-tools package was built from kexec-tools git repository at
 +<git://git.kernel.org/pub/scm/linux/kernel/git/horms/kexec-tools.git>.

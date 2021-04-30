@@ -1,6 +1,16 @@
+From: Khalid Aziz <khalid@debian.org>
+Date: Fri, 30 Apr 2021 11:17:32 -0700
+Subject: debianize
+
+---
+ Makefile.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Makefile.in b/Makefile.in
+index 09bbd5c..ece6206 100644
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -91,7 +91,7 @@ SHAREDSTATEDIR=$(BUILD_PREFIX)/com
+@@ -93,7 +93,7 @@ SHAREDSTATEDIR=$(BUILD_PREFIX)/com
  LOCALSTATEDIR=$(BUILD_PREFIX)/var
  LIBDIR=$(BUILD_PREFIX)/lib
  INFODIR=$(BUILD_PREFIX)/info

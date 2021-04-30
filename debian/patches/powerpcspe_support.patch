@@ -1,3 +1,13 @@
+From: Khalid Aziz <khalid@debian.org>
+Date: Fri, 30 Apr 2021 11:17:33 -0700
+Subject: powerpcspe_support
+
+---
+ kexec/arch/ppc/ppc-setup-dol.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kexec/arch/ppc/ppc-setup-dol.S b/kexec/arch/ppc/ppc-setup-dol.S
+index 17169bd..70d219d 100644
 --- a/kexec/arch/ppc/ppc-setup-dol.S
 +++ b/kexec/arch/ppc/ppc-setup-dol.S
 @@ -80,7 +80,7 @@ setup_dol_start:
