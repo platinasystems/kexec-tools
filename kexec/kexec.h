@@ -63,6 +63,7 @@
  */
 #define EFAILED		-1	/* default error code */
 #define ENOCRASHKERNEL	-2	/* no memory reserved for crashkernel */
+#define EFALLBACK	-3	/* fallback to kexec_load(2) may work */
 
 /*
  * This function doesn't actually exist.  The idea is that when someone
@@ -178,10 +179,6 @@ struct arch_map_entry {
 extern const struct arch_map_entry arches[];
 long physical_arch(void);
 
-#define KERNEL_VERSION(major, minor, patch) \
-	(((major) << 16) | ((minor) << 8) | patch)
-long kernel_version(void);
-
 void usage(void);
 int get_memory_ranges(struct memory_range **range, int *ranges,
 						unsigned long kexec_flags);
@@ -232,7 +229,9 @@ extern int file_types;
 #define OPT_LOAD_JUMP_BACK_HELPER 260
 #define OPT_ENTRY		261
 #define OPT_PRINT_CKR_SIZE	262
-#define OPT_MAX			263
+#define OPT_LOAD_LIVE_UPDATE	263
+#define OPT_EXEC_LIVE_UPDATE	264
+#define OPT_MAX			265
 #define KEXEC_OPTIONS \
 	{ "help",		0, 0, OPT_HELP }, \
 	{ "version",		0, 0, OPT_VERSION }, \
@@ -243,8 +242,10 @@ extern int file_types;
 	{ "load",		0, 0, OPT_LOAD }, \
 	{ "unload",		0, 0, OPT_UNLOAD }, \
 	{ "exec",		0, 0, OPT_EXEC }, \
+	{ "exec-live-update",	0, 0, OPT_EXEC_LIVE_UPDATE}, \
 	{ "load-preserve-context", 0, 0, OPT_LOAD_PRESERVE_CONTEXT}, \
 	{ "load-jump-back-helper", 0, 0, OPT_LOAD_JUMP_BACK_HELPER }, \
+	{ "load-live-update", 0, 0, OPT_LOAD_LIVE_UPDATE }, \
 	{ "entry",		1, 0, OPT_ENTRY }, \
 	{ "type",		1, 0, OPT_TYPE }, \
 	{ "load-panic",         0, 0, OPT_PANIC }, \
@@ -318,11 +319,12 @@ const char * proc_iomem(void);
 #define MAX_LINE	160
 
 char *concat_cmdline(const char *base, const char *append);
+void cmdline_add_liveupdate(char **base);
 
 int xen_present(void);
 int xen_kexec_load(struct kexec_info *info);
 int xen_kexec_unload(uint64_t kexec_flags);
-void xen_kexec_exec(void);
+void xen_kexec_exec(uint64_t kexec_flags);
 int xen_kexec_status(uint64_t kexec_flags);
 
 extern unsigned long long get_kernel_sym(const char *text);

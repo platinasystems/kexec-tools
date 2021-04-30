@@ -64,6 +64,44 @@ int __xc_interface_close(xc_interface *xch)
 }
 #endif /* CONFIG_LIBXENCTRL_DL */
 
+int xen_get_kexec_range(int range, uint64_t *start, uint64_t *end)
+{
+	uint64_t size;
+	xc_interface *xc;
+	int rc = -1;
+
+	xc = xc_interface_open(NULL, NULL, 0);
+	if (!xc) {
+		fprintf(stderr, "failed to open xen control interface.\n");
+		goto out;
+	}
+
+	rc = xc_kexec_get_range(xc, range, 0, &size, start);
+	if (rc < 0) {
+		fprintf(stderr, "failed to get range=%d from hypervisor.\n", range);
+		goto out_close;
+	}
+
+	*end = *start + size - 1;
+
+out_close:
+	xc_interface_close(xc);
+
+out:
+	return rc;
+}
+
+static uint8_t xen_get_kexec_type(unsigned long kexec_flags)
+{
+	if (kexec_flags & KEXEC_ON_CRASH)
+		return KEXEC_TYPE_CRASH;
+
+	if (kexec_flags & KEXEC_LIVE_UPDATE)
+		return KEXEC_TYPE_LIVE_UPDATE;
+
+	return KEXEC_TYPE_DEFAULT;
+}
+
 #define IDENTMAP_1MiB (1024 * 1024)
 
 int xen_kexec_load(struct kexec_info *info)
@@ -150,8 +188,7 @@ int xen_kexec_load(struct kexec_info *info)
 		seg++;
 	}
 
-	type = (info->kexec_flags & KEXEC_ON_CRASH) ? KEXEC_TYPE_CRASH
-		: KEXEC_TYPE_DEFAULT;
+	type = xen_get_kexec_type(info->kexec_flags);
 
 	arch = (info->kexec_flags & KEXEC_ARCH_MASK) >> 16;
 #if defined(__i386__) || defined(__x86_64__)
@@ -180,8 +217,7 @@ int xen_kexec_unload(uint64_t kexec_flags)
 	if (!xch)
 		return -1;
 
-	type = (kexec_flags & KEXEC_ON_CRASH) ? KEXEC_TYPE_CRASH
-		: KEXEC_TYPE_DEFAULT;
+	type = xen_get_kexec_type(kexec_flags);
 
 	ret = xc_kexec_unload(xch, type);
 
@@ -201,7 +237,7 @@ int xen_kexec_status(uint64_t kexec_flags)
 	if (!xch)
 		return -1;
 
-	type = (kexec_flags & KEXEC_ON_CRASH) ? KEXEC_TYPE_CRASH : KEXEC_TYPE_DEFAULT;
+	type = xen_get_kexec_type(kexec_flags);
 
 	ret = xc_kexec_status(xch, type);
 
@@ -211,20 +247,29 @@ int xen_kexec_status(uint64_t kexec_flags)
 	return ret;
 }
 
-void xen_kexec_exec(void)
+void xen_kexec_exec(uint64_t kexec_flags)
 {
 	xc_interface *xch;
-	
+	uint8_t type = KEXEC_TYPE_DEFAULT;
+
 	xch = xc_interface_open(NULL, NULL, 0);
 	if (!xch)
 		return;
 
-	xc_kexec_exec(xch, KEXEC_TYPE_DEFAULT);
+	if (kexec_flags & KEXEC_LIVE_UPDATE)
+		type = KEXEC_TYPE_LIVE_UPDATE;
+
+	xc_kexec_exec(xch, type);
 
 	xc_interface_close(xch);
 }
 
 #else /* ! HAVE_LIBXENCTRL */
+
+int xen_get_kexec_range(int range, uint64_t *start, uint64_t *end)
+{
+	return -1;
+}
 
 int xen_kexec_load(struct kexec_info *UNUSED(info))
 {
@@ -241,7 +286,7 @@ int xen_kexec_status(uint64_t kexec_flags)
 	return -1;
 }
 
-void xen_kexec_exec(void)
+void xen_kexec_exec(uint64_t kexec_flags)
 {
 }
 

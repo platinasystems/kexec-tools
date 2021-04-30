@@ -4,7 +4,7 @@ dnl
 dnl 
 
 dnl ---Required
-AC_INIT(kexec-tools, 2.0.20)
+AC_INIT(kexec-tools, 2.0.22-rc1)
 AC_CONFIG_AUX_DIR(./config)
 AC_CONFIG_HEADERS([include/config.h])
 AC_LANG(C)
@@ -55,10 +55,24 @@ case $target_cpu in
 	ia64|x86_64|alpha|m68k )
 		ARCH="$target_cpu"
 		;;
+	hppa*)
+		ARCH="hppa"
+		;;
 	* )
 		AC_MSG_ERROR([unsupported architecture $target_cpu])
 		;;
 esac
+
+if test "$ARCH" = "x86_64" ; then
+	case $target in
+		*x32 )
+			SUBARCH="x32"
+			;;
+		* )
+			SUBARCH=""
+			;;
+	esac
+fi
 
 dnl ---Options
 
@@ -137,6 +151,7 @@ AC_SUBST(PURGATORY_EXTRA_CFLAGS, [$PURGATORY_EXTRA_CFLAGS])
 
 dnl Find the helper functions
 AC_PROG_INSTALL
+AC_CHECK_PROG([CHMOD],    chmod,    chmod,    "no", [$PATH])
 AC_CHECK_PROG([MKDIR],    mkdir,    mkdir,    "no", [$PATH])
 AC_CHECK_PROG([RM],       rm,       rm,       "no", [$PATH])
 AC_CHECK_PROG([CP],       cp,       cp,       "no", [$PATH])

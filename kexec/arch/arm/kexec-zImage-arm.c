@@ -228,11 +228,6 @@ int atag_arm_load(struct kexec_info *info, unsigned long base,
 	struct tag *params;
 	
 	buf = xmalloc(getpagesize());
-	if (!buf) {
-		fprintf(stderr, "Compiling ATAGs: out of memory\n");
-		return -1;
-	}
-
 	memset(buf, 0xff, getpagesize());
 	params = (struct tag *)buf;
 
@@ -315,8 +310,6 @@ static int setup_dtb_prop(char **bufp, off_t *sizep, int parentoffset,
 		dtb_size += fdt_node_len(node_name);
 		fdt_set_totalsize(dtb_buf, dtb_size);
 		dtb_buf = xrealloc(dtb_buf, dtb_size);
-		if (dtb_buf == NULL)
-			die("xrealloc failed\n");
 		off = fdt_add_subnode(dtb_buf, parentoffset, node_name);
 	}
 
@@ -340,8 +333,6 @@ static int setup_dtb_prop(char **bufp, off_t *sizep, int parentoffset,
 	if (fdt_totalsize(dtb_buf) < dtb_size) {
 		fdt_set_totalsize(dtb_buf, dtb_size);
 		dtb_buf = xrealloc(dtb_buf, dtb_size);
-		if (dtb_buf == NULL)
-			die("xrealloc failed\n");
 	}
 
 	if (fdt_setprop(dtb_buf, off, prop_name,
@@ -391,6 +382,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	unsigned int atag_offset = 0x1000; /* 4k offset from memory start */
 	unsigned int extra_size = 0x8000; /* TEXT_OFFSET */
 	const struct zimage_tag *tag;
+	size_t kernel_buf_size;
 	size_t kernel_mem_size;
 	const char *command_line;
 	char *modified_cmdline = NULL;
@@ -418,7 +410,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		{ "page-offset",	1, 0, OPT_PAGE_OFFSET },
 		{ 0, 			0, 0, 0 },
 	};
-	static const char short_options[] = KEXEC_ARCH_OPT_STR "a:r:";
+	static const char short_options[] = KEXEC_ARCH_OPT_STR "";
 
 	/*
 	 * Parse the command line arguments
@@ -478,7 +470,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 			command_line_len = COMMAND_LINE_SIZE;
 	}
 	if (ramdisk)
-		ramdisk_buf = slurp_file(ramdisk, &initrd_size);
+		ramdisk_buf = slurp_file_mmap(ramdisk, &initrd_size);
 
 	if (dtb_file)
 		dtb_buf = slurp_file(dtb_file, &dtb_length);
@@ -547,10 +539,27 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 	}
 
 	/*
+	 * Save the length of the compressed kernel image w/o the appended DTB.
+	 * This will be required later on when the kernel image contained
+	 * in the zImage will be loaded into a kernel memory segment.
+	 * And we want to load ONLY the compressed kernel image from the zImage
+	 * and discard the appended DTB.
+	 */
+	kernel_buf_size = len;
+
+	/*
 	 * Always extend the zImage by four bytes to ensure that an appended
 	 * DTB image always sees an initialised value after _edata.
 	 */
 	kernel_mem_size = len + 4;
+
+	/*
+	 * Check for a kernel size extension, and set or validate the
+	 * image size.  This is the total space needed to avoid the
+	 * boot kernel BSS, so other data (such as initrd) does not get
+	 * overwritten.
+	 */
+	tag = find_extension_tag(buf, len, ZIMAGE_TAG_KRNL_SIZE);
 
 	/*
 	 * The zImage length does not include its stack (4k) or its
@@ -560,13 +569,6 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 
 	dbgprintf("zImage requires 0x%08llx bytes\n", (unsigned long long)len);
 
-	/*
-	 * Check for a kernel size extension, and set or validate the
-	 * image size.  This is the total space needed to avoid the
-	 * boot kernel BSS, so other data (such as initrd) does not get
-	 * overwritten.
-	 */
-	tag = find_extension_tag(buf, len, ZIMAGE_TAG_KRNL_SIZE);
 	if (tag) {
 		uint32_t *p = (void *)buf + le32_to_cpu(tag->u.krnl_size.size_ptr);
 		uint32_t edata_size = le32_to_cpu(get_unaligned(p));
@@ -616,9 +618,6 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		uint64_t start, end;
 
 		modified_cmdline = xmalloc(COMMAND_LINE_SIZE);
-		if (!modified_cmdline)
-			return -1;
-
 		memset(modified_cmdline, '\0', COMMAND_LINE_SIZE);
 
 		if (command_line) {
@@ -770,7 +769,7 @@ int zImage_arm_load(int argc, char **argv, const char *buf, off_t len,
 		add_segment(info, dtb_buf, dtb_length, dtb_offset, dtb_length);
 	}
 
-	add_segment(info, buf, len, kernel_base, kernel_mem_size);
+	add_segment(info, buf, kernel_buf_size, kernel_base, kernel_mem_size);
 
 	info->entry = (void*)kernel_base;
 

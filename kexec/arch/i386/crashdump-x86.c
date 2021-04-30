@@ -55,14 +55,8 @@ static int get_kernel_page_offset(struct kexec_info *UNUSED(info),
 	int kv;
 
 	if (elf_info->machine == EM_X86_64) {
-		kv = kernel_version();
-		if (kv < 0)
-			return -1;
-
-		if (kv < KERNEL_VERSION(2, 6, 27))
-			elf_info->page_offset = X86_64_PAGE_OFFSET_PRE_2_6_27;
-		else
-			elf_info->page_offset = X86_64_PAGE_OFFSET;
+		/* get_kernel_vaddr_and_size will override this */
+		elf_info->page_offset = X86_64_PAGE_OFFSET;
 	}
 	else if (elf_info->machine == EM_386) {
 		elf_info->page_offset = X86_PAGE_OFFSET;
@@ -149,17 +143,15 @@ static int get_kernel_vaddr_and_size(struct kexec_info *UNUSED(info),
 
 	/* Search for the real PAGE_OFFSET when KASLR memory randomization
 	 * is enabled */
-	if (get_kernel_sym("page_offset_base") != 0) {
-		for(phdr = ehdr.e_phdr; phdr != end_phdr; phdr++) {
-			if (phdr->p_type == PT_LOAD) {
-				vaddr = phdr->p_vaddr & pud_mask;
-				if (lowest_vaddr == 0 || lowest_vaddr > vaddr)
-					lowest_vaddr = vaddr;
-			}
+	for(phdr = ehdr.e_phdr; phdr != end_phdr; phdr++) {
+		if (phdr->p_type == PT_LOAD) {
+			vaddr = phdr->p_vaddr & pud_mask;
+			if (lowest_vaddr == 0 || lowest_vaddr > vaddr)
+				lowest_vaddr = vaddr;
 		}
-		if (lowest_vaddr != 0)
-			elf_info->page_offset = lowest_vaddr;
 	}
+	if (lowest_vaddr != 0)
+		elf_info->page_offset = lowest_vaddr;
 
 	/* Traverse through the Elf headers and find the region where
 	 * _stext symbol is located in. That's where kernel is mapped */
@@ -269,8 +261,14 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges,
 		str = line + consumed;
 		dbgprintf("%016llx-%016llx : %s",
 			start, end, str);
-		/* Only Dumping memory of type System RAM. */
-		if (memcmp(str, "System RAM\n", 11) == 0) {
+		/*
+		 * We want to dump any System RAM -- memory regions currently
+		 * used by the kernel. In the usual case, this is "System RAM"
+		 * on the top level. However, we can also have "System RAM
+		 * (virtio_mem)" below virtio devices or "System RAM (kmem)"
+		 * below "Persistent Memory".
+		 */
+		if (strstr(str, "System RAM")) {
 			type = RANGE_RAM;
 		} else if (memcmp(str, "ACPI Tables\n", 12) == 0) {
 			/*
@@ -347,8 +345,8 @@ static int get_crash_memory_ranges(struct memory_range **range, int *ranges,
 static int get_crash_memory_ranges_xen(struct memory_range **range,
 					int *ranges, unsigned long lowmem_limit)
 {
+	struct e820entry *e820entries;
 	int j, rc, ret = -1;
-	struct e820entry e820entries[CRASH_MAX_MEMORY_RANGES];
 	unsigned int i;
 	xc_interface *xc;
 
@@ -358,6 +356,8 @@ static int get_crash_memory_ranges_xen(struct memory_range **range,
 		fprintf(stderr, "%s: Failed to open Xen control interface\n", __func__);
 		return -1;
 	}
+
+	e820entries = xmalloc(sizeof(*e820entries) * CRASH_MAX_MEMORY_RANGES);
 
 	rc = xc_get_machine_memory_map(xc, e820entries, CRASH_MAX_MEMORY_RANGES);
 
@@ -387,7 +387,7 @@ static int get_crash_memory_ranges_xen(struct memory_range **range,
 
 err:
 	xc_interface_close(xc);
-
+	free(e820entries);
 	return ret;
 }
 #else
@@ -473,9 +473,18 @@ static int add_memmap(struct memory_range *memmap_p, int *nr_memmap,
 	int i, j, nr_entries = 0, tidx = 0, align = 1024;
 	unsigned long long mstart, mend;
 
-	/* Do alignment check if it's RANGE_RAM */
-	if ((type == RANGE_RAM) && ((addr%align) || (size%align)))
-		return -1;
+	/* Shrink to 1KiB alignment if needed. */
+	if (type == RANGE_RAM && ((addr%align) || (size%align))) {
+		unsigned long long end = addr + size;
+
+		printf("%s: RAM chunk %#llx - %#llx unaligned\n", __func__, addr, end);
+		addr = _ALIGN_UP(addr, align);
+		end = _ALIGN_DOWN(end, align);
+		if (addr >= end)
+			return -1;
+		size = end - addr;
+		printf("%s: RAM chunk shrunk to %#llx - %#llx\n", __func__, addr, end);
+	}
 
 	/* Make sure at least one entry in list is free. */
 	for (i = 0; i < CRASH_MAX_MEMMAP_NR;  i++) {
@@ -911,8 +920,11 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	add_memmap(memmap_p, &nr_memmap, info->backup_src_start, info->backup_src_size, RANGE_RAM);
 	for (i = 0; i < crash_reserved_mem_nr; i++) {
 		sz = crash_reserved_mem[i].end - crash_reserved_mem[i].start +1;
-		if (add_memmap(memmap_p, &nr_memmap, crash_reserved_mem[i].start, sz, RANGE_RAM) < 0)
+		if (add_memmap(memmap_p, &nr_memmap, crash_reserved_mem[i].start,
+				sz, RANGE_RAM) < 0) {
+			free(memmap_p);
 			return ENOCRASHKERNEL;
+		}
 	}
 
 	/* Create a backup region segment to store backup data*/
@@ -924,22 +936,29 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 						0, max_addr, -1);
 		dbgprintf("Created backup segment at 0x%lx\n",
 			  info->backup_start);
-		if (delete_memmap(memmap_p, &nr_memmap, info->backup_start, sz) < 0)
+		if (delete_memmap(memmap_p, &nr_memmap, info->backup_start, sz) < 0) {
+			free(tmp);
+			free(memmap_p);
 			return EFAILED;
+		}
 	}
 
 	/* Create elf header segment and store crash image data. */
 	if (arch_options.core_header_type == CORE_TYPE_ELF64) {
 		if (crash_create_elf64_headers(info, &elf_info, mem_range,
 						nr_ranges, &tmp, &bufsz,
-						ELF_CORE_HEADER_ALIGN) < 0)
+						ELF_CORE_HEADER_ALIGN) < 0) {
+			free(memmap_p);
 			return EFAILED;
+		}
 	}
 	else {
 		if (crash_create_elf32_headers(info, &elf_info, mem_range,
 						nr_ranges, &tmp, &bufsz,
-						ELF_CORE_HEADER_ALIGN) < 0)
+						ELF_CORE_HEADER_ALIGN) < 0) {
+			free(memmap_p);
 			return EFAILED;
+		}
 	}
 	/* the size of the elf headers allocated is returned in 'bufsz' */
 
@@ -960,15 +979,17 @@ int load_crashdump_segments(struct kexec_info *info, char* mod_cmdline,
 	elfcorehdr = add_buffer(info, tmp, bufsz, memsz, align, min_base,
 							max_addr, -1);
 	dbgprintf("Created elf header segment at 0x%lx\n", elfcorehdr);
-	if (delete_memmap(memmap_p, &nr_memmap, elfcorehdr, memsz) < 0)
+	if (delete_memmap(memmap_p, &nr_memmap, elfcorehdr, memsz) < 0) {
+		free(memmap_p);
 		return -1;
+		}
 	if (!bzImage_support_efi_boot || arch_options.noefi ||
 	    !sysfs_efi_runtime_map_exist())
 		cmdline_add_efi(mod_cmdline);
 	cmdline_add_elfcorehdr(mod_cmdline, elfcorehdr);
 
 	/* Inform second kernel about the presence of ACPI tables. */
-	for (i = 0; i < CRASH_MAX_MEMORY_RANGES; i++) {
+	for (i = 0; i < nr_ranges; i++) {
 		unsigned long start, end, size, type;
 		if ( !( mem_range[i].type == RANGE_ACPI
 			|| mem_range[i].type == RANGE_ACPI_NVS

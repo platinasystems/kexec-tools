@@ -129,9 +129,12 @@ int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 	if (arch_options.command_line)
 		strncat(cmdline_buf, arch_options.command_line, command_line_len);
 	if (crash_cmdline)
+	{
 		strncat(cmdline_buf, crash_cmdline,
 				sizeof(crash_cmdline) -
 				strlen(crash_cmdline) - 1);
+		free(crash_cmdline);
+	}
 
 	if (info->kexec_flags & KEXEC_ON_CRASH)
 		/* In case of crashdump segment[0] is kernel.
@@ -158,7 +161,7 @@ int elf_mips_load(int argc, char **argv, const char *buf, off_t len,
 
 		/* Create initrd entries in dtb - although at this time
 		 * they would not point to the correct location */
-		dtb_set_initrd(&dtb_buf, &dtb_length, initrd_buf, initrd_buf + initrd_size);
+		dtb_set_initrd(&dtb_buf, &dtb_length, (off_t)initrd_buf, (off_t)initrd_buf + initrd_size);
 
 		initrd_base = add_buffer(info, initrd_buf, initrd_size,
 					initrd_size, sizeof(void *),

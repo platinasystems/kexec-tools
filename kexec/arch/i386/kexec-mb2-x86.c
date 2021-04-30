@@ -42,6 +42,8 @@
 #include "../../kexec.h"
 #include "../../kexec-elf.h"
 #include "kexec-x86.h"
+#include "../../kexec-syscall.h"
+#include "../../kexec-xen.h"
 #include <arch/options.h>
 
 /* From GNU GRUB */
@@ -358,13 +360,13 @@ static uint64_t multiboot2_make_mbi(struct kexec_info *info, char *cmdline, int 
 	}
 
 out:
-	return (uint64_t) ptrorig;
+	return (uint64_t) (uintptr_t) ptrorig;
 }
 
 static uint64_t multiboot2_mbi_add_module(void *mbi_buf, uint64_t mbi_ptr, uint32_t mod_start,
 					  uint32_t mod_end, char *mod_clp)
 {
-	struct multiboot_tag_module *tag = (struct multiboot_tag_module *) mbi_ptr;
+	struct multiboot_tag_module *tag = (struct multiboot_tag_module *) (uintptr_t) mbi_ptr;
 
 	tag->type = MULTIBOOT_TAG_TYPE_MODULE;
 	tag->size = sizeof(struct multiboot_tag_module) + strlen((char *)(long) mod_clp) + 1;
@@ -379,13 +381,22 @@ static uint64_t multiboot2_mbi_add_module(void *mbi_buf, uint64_t mbi_ptr, uint3
 
 static uint64_t multiboot2_mbi_end(void *mbi_buf, uint64_t mbi_ptr)
 {
-	struct multiboot_tag *tag = (struct multiboot_tag *) mbi_ptr;
+	struct multiboot_tag *tag = (struct multiboot_tag *) (uintptr_t) mbi_ptr;
 
 	tag->type = MULTIBOOT_TAG_TYPE_END;
 	tag->size = sizeof (struct multiboot_tag);
 	mbi_ptr += ALIGN_UP (tag->size, MULTIBOOT_TAG_ALIGN);
 
 	return mbi_ptr;
+}
+
+static inline int multiboot2_rel_valid(struct multiboot_header_tag_relocatable *rel_tag,
+					uint64_t rel_start, uint64_t rel_end)
+{
+	if (rel_start >= rel_tag->min_addr && rel_end <= rel_tag->max_addr)
+		return 1;
+
+	return 0;
 }
 
 int multiboot2_x86_load(int argc, char **argv, const char *buf, off_t len,
@@ -399,7 +410,6 @@ int multiboot2_x86_load(int argc, char **argv, const char *buf, off_t len,
 	char *command_line = NULL, *tmp_cmdline = NULL;
 	int command_line_len;
 	char *imagename, *cp, *append = NULL;;
-	int result;
 	int opt;
 	int modules, mod_command_line_space;
 	uint64_t mbi_ptr;
@@ -414,6 +424,7 @@ int multiboot2_x86_load(int argc, char **argv, const char *buf, off_t len,
 		{ 0, 				0, 0, 0 },
 	};
 	static const char short_options[] = KEXEC_ARCH_OPT_STR "";
+	uint64_t rel_min, rel_max;
 
 	/* Probe for the MB header if it's not already found */
 	if (mbh == NULL && multiboot_x86_probe(buf, len) != 1)
@@ -429,7 +440,6 @@ int multiboot2_x86_load(int argc, char **argv, const char *buf, off_t len,
 	command_line_len = 0;
 	modules = 0;
 	mod_command_line_space = 0;
-	result = 0;
 	while((opt = getopt_long(argc, argv, short_options, options, 0)) != -1)
 	{
 		switch(opt) {
@@ -461,19 +471,59 @@ int multiboot2_x86_load(int argc, char **argv, const char *buf, off_t len,
 	if (tmp_cmdline) {
 		free(tmp_cmdline);
 	}
+
+	if (xen_present() && info->kexec_flags & KEXEC_LIVE_UPDATE ) {
+		if (!mhi.rel_tag) {
+			fprintf(stderr, "Multiboot2 image must be relocatable"
+				"for KEXEC_LIVE_UPDATE.\n");
+			return -1;
+		}
+		cmdline_add_liveupdate(&command_line);
+	}
+
 	command_line_len = strlen(command_line) + 1;
 
 	/* Load the ELF executable */
-	if (mhi.rel_tag)
+	if (mhi.rel_tag) {
+		rel_min = mhi.rel_tag->min_addr;
+		rel_max = mhi.rel_tag->max_addr;
+
+		if (info->kexec_flags & KEXEC_LIVE_UPDATE && xen_present()) {
+			/* TODO also check if elf is xen */
+			/* On a live update, load target xen over the current xen image. */
+			uint64_t xen_start, xen_end;
+
+			xen_get_kexec_range(KEXEC_RANGE_MA_XEN, &xen_start, &xen_end);
+			if (multiboot2_rel_valid(mhi.rel_tag, xen_start, xen_end)) {
+				rel_min = xen_start;
+			} else {
+				fprintf(stderr, "Cannot place Elf into "
+				"KEXEC_RANGE_MA_XEN for KEXEC_LIVE_UPDATE.\n");
+				return -1;
+			}
+		}
+
 		elf_exec_build_load_relocatable(info, &ehdr, buf, len, 0,
-						mhi.rel_tag->min_addr, mhi.rel_tag->max_addr,
-						mhi.rel_tag->align);
-	else
+						rel_min, rel_max, mhi.rel_tag->align);
+	} else
 		elf_exec_build_load(info, &ehdr, buf, len, 0);
+
+	if (info->kexec_flags & KEXEC_LIVE_UPDATE && xen_present()) {
+		uint64_t lu_start, lu_end;
+
+		xen_get_kexec_range(7 /* KEXEC_RANGE_MA_LIVEUPDATE */, &lu_start, &lu_end);
+		/* Fit everything else into lu_start-lu_end. First page after lu_start is
+		 * reserved for LU breadcrumb. */
+		rel_min = lu_start + 4096;
+		rel_max = lu_end;
+	} else {
+		rel_min = 0;
+		rel_max = ULONG_MAX;
+	}
 
 	/* Load the setup code */
 	elf_rel_build_load(info, &info->rhdr, purgatory, purgatory_size,
-			   0, ULONG_MAX, 1, 0);
+			   rel_min, rel_max, 1, 0);
 
 	/* Construct information tags. */
 	mbi_bytes = multiboot2_get_mbi_size(info->memory_ranges, command_line_len, modules, mod_command_line_space);
@@ -481,6 +531,18 @@ int multiboot2_x86_load(int argc, char **argv, const char *buf, off_t len,
 
 	mbi_ptr = multiboot2_make_mbi(info, command_line, command_line_len, info->rhdr.rel_addr, mbi_buf, mbi_bytes);
 	free(command_line);
+
+	if (info->kexec_flags & KEXEC_LIVE_UPDATE && xen_present()) {
+		if (multiboot2_rel_valid(mhi.rel_tag, rel_min, rel_max)) {
+			/* Shrink the reloc range to fit into LU region for xen. */
+			mhi.rel_tag->min_addr = rel_min;
+			mhi.rel_tag->max_addr = rel_max;
+		} else {
+			fprintf(stderr, "Multiboot2 image cannot be relocated into "
+				"KEXEC_RANGE_MA_LIVEUPDATE for KEXEC_LIVE_UPDATE.\n");
+			return -1;
+		}
+	}
 
 	/* Load modules */
 	if (modules) {
